@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import QMainWindow, QLabel, QVBoxLayout, QWidget, QPushButton, QMessageBox, QHBoxLayout, QTabWidget
 from app.ui.add_user_window import AddUserWindow
 from app.ui.authors_tab import AuthorsTab
+from app.ui.customers_tab import CustomersTab
 
 class MainWindow(QMainWindow):
     def __init__(self, current_user: dict):
@@ -13,6 +14,9 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.authors_tab = AuthorsTab(self)
         self.tabs.addTab(self.authors_tab, "Автори")
+
+        self.customer_tab = CustomersTab(self)
+        self.tabs.addTab(self.customer_tab, "Замовники")
 
         # --- верхня панель (привітання + кнопка додати користувача для admin)
         header = QWidget()
@@ -30,14 +34,14 @@ class MainWindow(QMainWindow):
             btn_add_user.clicked.connect(self.open_add_user)
             header_layout.addWidget(btn_add_user)
 
-            # --- центральний контейнер
-            central = QWidget()
-            layout = QVBoxLayout(central)
-            layout.addWidget(header)
-            layout.addWidget(self.tabs)
-            self.setCentralWidget(central)
+        # --- центральний контейнер
+        central = QWidget()
+        layout = QVBoxLayout(central)
+        layout.addWidget(header)
+        layout.addWidget(self.tabs)
+        self.setCentralWidget(central)
 
-            self.apply_permission()
+        self.apply_permission()
 
     def open_add_user(self):
         self.add_user_win = AddUserWindow(self)
@@ -47,6 +51,13 @@ class MainWindow(QMainWindow):
         role = self.current_user.get("access_right", "guest").lower()
         can_edit = role in ("admin", "operator")
 
+        # Автори
         self.authors_tab.btn_add.setEnabled(can_edit)
         self.authors_tab.btn_edit.setEnabled(can_edit)
         self.authors_tab.btn_del.setEnabled(can_edit)
+
+        # Замовники
+        self.customer_tab.btn_add.setEnabled(can_edit)
+        self.customer_tab.btn_edit.setEnabled(can_edit)
+        self.customer_tab.btn_del.setEnabled(can_edit)
+
