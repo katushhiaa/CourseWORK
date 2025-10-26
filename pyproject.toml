@@ -1,0 +1,31 @@
+[tool.ruff]
+src = ["."]
+exclude = ["venv", "__pycache__", "build", "dist"]
+line-length = 100
+fix = true
+
+# Форматування коду (як Prettier)
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+# Лінтинг (новий формат Ruff)
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # import sorting
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "N",    # pep8-naming
+]
+ignore = ["E501"]  # Довжину рядка контролює форматер
+
+# Сортування імпортів
+[tool.ruff.lint.isort]
+combine-as-imports = true
+force-single-line = false
+known-first-party = ["app"]  # свій пакет або модуль

@@ -1,6 +1,16 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QFormLayout, QLineEdit, QPushButton, QLabel, QMessageBox
 from PyQt6.QtCore import Qt
-from ..security.auth_service import get_user, check_password, forgot_password
+from PyQt6.QtWidgets import (
+    QFormLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
+
+from ..security.auth_service import check_password, forgot_password, get_user
+from .registration_window import RegistrationWindow
 
 class LoginWindow(QWidget):
     def __init__(self, on_success=None):
@@ -22,6 +32,10 @@ class LoginWindow(QWidget):
         btn_forgot.setFlat(True)
         btn_forgot.clicked.connect(self.handle_forgot)
 
+        btn_register = QPushButton("Зареєструватися")
+        btn_register.setFlat(True)
+        btn_register.clicked.connect(self.open_register_window)
+
         self.status_lbl = QLabel("")
         self.status_lbl.setStyleSheet("color:#666")
 
@@ -33,6 +47,7 @@ class LoginWindow(QWidget):
         root.addLayout(form)
         root.addWidget(btn_login)
         root.addWidget(btn_forgot, alignment=Qt.AlignmentFlag.AlignLeft)
+        root.addWidget(btn_register, alignment=Qt.AlignmentFlag.AlignLeft)
         root.addWidget(self.status_lbl)
 
     def handle_login(self):
@@ -64,11 +79,15 @@ class LoginWindow(QWidget):
         plain = forgot_password(login)
         if plain:
             QMessageBox.information(
-                self, "Forgot password (демо)",
-                f"Пароль для '{login}': {plain}\n\n"
+                self, "Forgot password (демо)", f"Пароль для '{login}': {plain}\n\n"
             )
         else:
             QMessageBox.information(
-                self, "Forgot password",
-                "Пароль недоступний у відкритому вигляді. Зверніться до адміністратора."
+                self,
+                "Forgot password",
+                "Пароль недоступний у відкритому вигляді. Зверніться до адміністратора.",
             )
+
+    def open_register_window(self):
+        self.reg_window = RegistrationWindow()
+        self.reg_window.show()
