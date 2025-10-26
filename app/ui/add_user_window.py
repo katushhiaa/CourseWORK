@@ -1,13 +1,25 @@
-from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QFormLayout, QLineEdit, QPushButton,
-                             QComboBox, QMessageBox)
 import sys
+
+from PyQt6.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QFormLayout,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+    QWidget, QDialog,
+)
+
 from app.security.auth_service import create_user
 
-class AddUserWindow(QWidget):
+
+class AddUserWindow(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Додавання користувача")
-        self.setMinimumSize(400, 200)  # ширина+висота
+        self.setModal(True)  # 🔑 робить діалог модальним
+        self.setMinimumSize(400, 200)
 
         # Поля
         self.login = QLineEdit()
