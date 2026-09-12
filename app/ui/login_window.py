@@ -9,8 +9,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ..security.auth_service import check_password, forgot_password, get_user
-from .registration_window import RegistrationWindow
+from app.security.auth_service import check_password, forgot_password, get_user
+from app.ui.shortcuts_helper import apply_common_shortcuts
 
 class LoginWindow(QWidget):
     def __init__(self, on_success=None):
@@ -50,6 +50,19 @@ class LoginWindow(QWidget):
         root.addWidget(btn_register, alignment=Qt.AlignmentFlag.AlignLeft)
         root.addWidget(self.status_lbl)
 
+        apply_common_shortcuts(
+            self,
+            help_text=(
+                "Вікно входу:\n"
+                "F1 — допомога\n"
+                "Enter — увійти в систему\n"
+                "Esc — закрити вікно\n"
+                "Tab / Shift+Tab — перехід між полями"
+            ),
+            on_confirm=self.handle_login,
+            on_cancel=self.close
+        )
+
     def handle_login(self):
         login = self.login_input.text().strip()
         pwd = self.pwd_input.text()
@@ -79,15 +92,18 @@ class LoginWindow(QWidget):
         plain = forgot_password(login)
         if plain:
             QMessageBox.information(
-                self, "Forgot password (демо)", f"Пароль для '{login}': {plain}\n\n"
+                self,
+                "Забув пароль",
+                f"Пароль для '{login}': {plain}\n\n"
             )
         else:
             QMessageBox.information(
                 self,
                 "Forgot password",
-                "Пароль недоступний у відкритому вигляді. Зверніться до адміністратора.",
+                "Пароль переглянути неможливо, бо користувача з таким логіном не існує.",
             )
 
     def open_register_window(self):
-        self.reg_window = RegistrationWindow()
-        self.reg_window.show()
+        from app.ui.registration_window import RegistrationWindow
+        self.register = RegistrationWindow(login_window=self)
+        self.register.show()

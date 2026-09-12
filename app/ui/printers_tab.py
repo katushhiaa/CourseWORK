@@ -16,8 +16,6 @@ from app.classes.Printer import Printer
 from app.repositories import printers_repo as RP
 
 HEADERS = ["ID", "Назва друкарні", "Адреса", "Телефон"]
-# друкарня
-
 
 class PrintersTab(QWidget):
     data_updated = pyqtSignal()
@@ -25,7 +23,6 @@ class PrintersTab(QWidget):
         super().__init__(parent)
         root = QVBoxLayout(self)
 
-        # ── Пошук + кнопки
         top = QHBoxLayout()
         self.search_edit = QLineEdit(placeholderText="Пошук: назва, адреса або телефон")
         self.btn_search = QPushButton("Пошук")
@@ -44,7 +41,6 @@ class PrintersTab(QWidget):
         top.addWidget(self.btn_del)
         root.addLayout(top)
 
-        # ── Таблиця
         self.table = QTableWidget(0, len(HEADERS))
         self.table.setHorizontalHeaderLabels(HEADERS)
         self.table.setSelectionBehavior(self.table.SelectionBehavior.SelectRows)
@@ -75,8 +71,7 @@ class PrintersTab(QWidget):
         self.form_box.setVisible(False)
         root.addWidget(self.form_box)
 
-        # технічне
-        self._mode: str | None = None  # "add" / "edit"
+        self._mode: str | None = None
         self._edit_id: str | None = None
 
         self.reload()
@@ -100,7 +95,7 @@ class PrintersTab(QWidget):
                 if c == 0:
                     it.setFlags(Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled)
                 self.table.setItem(r, c, it)
-            self.table.resizeColumnsToContents()
+        self.table.resizeColumnsToContents()
 
     def mode_add(self):
         self._mode = "add"
@@ -174,3 +169,22 @@ class PrintersTab(QWidget):
                 self.data_updated.emit()
             except Exception as e:
                 QMessageBox.critical(self, "Помилка", f"Не вдалося видалити:\n{e}")
+
+
+    def on_enter(self):
+        if self.form_box.isVisible():
+            self.save_form()
+        elif self.search_edit.hasFocus():
+            self.reload()
+        elif self.table.hasFocus():
+            self.mode_edit()
+        else:
+            self.mode_add()
+
+
+    def on_escape(self):
+        if self.form_box.isVisible():
+            self.cancel_form()
+        elif self.search_edit.text():
+            self.search_edit.clear()
+            self.reload()

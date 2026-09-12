@@ -1,8 +1,6 @@
 from datetime import date, datetime
 from typing import List, Optional
-
 from app.classes.Entity import Entity
-
 
 class Order(Entity):
     def __init__(
@@ -107,10 +105,15 @@ class Order(Entity):
             raise ValueError("is_completed має бути булевим значенням")
         self._is_completed = value
 
-    def to_dict(self) -> dict:
-        def fmt(d):
-            return d.isoformat() if isinstance(d, datetime) else None
+    @property
+    def cancel_reason(self) -> Optional[str]:
+        return self._cancel_reason
 
+    @cancel_reason.setter
+    def cancel_reason(self, value: Optional[str]):
+        self._cancel_reason = value.strip() if value else None
+
+    def to_dict(self) -> dict:
         return {
             "order_number": self.order_number,
             "customer_id": self.customer_id,

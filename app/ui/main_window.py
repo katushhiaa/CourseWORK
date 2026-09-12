@@ -5,8 +5,9 @@ from PyQt6.QtWidgets import (
     QTabWidget,
     QVBoxLayout,
     QHBoxLayout,
-    QWidget,
+    QWidget, QMessageBox, QAbstractButton,
 )
+from app.ui.query_window import QueryWindow
 from app.ui.add_user_window import AddUserWindow
 from app.ui.authors_tab import AuthorsTab
 from app.ui.customers_tab import CustomersTab
@@ -14,11 +15,16 @@ from app.ui.printers_tab import PrintersTab
 from app.ui.publications_window import PublicationsTab
 from app.ui.orders_tab import OrdersTab
 from app.ui.analytics_tab import AnalyticsTab
-
+from app.ui.saved_analytics_tab import SavedAnalyticsTab
+from app.ui.shortcuts_helper import apply_common_shortcuts
+from app.security.auth_service import request_access
+from app.ui.requests_tab import RequestsTab
 
 class MainWindow(QMainWindow):
-    def __init__(self, current_user: dict):
+    def __init__(self, current_user: dict, login_window=None):
         super().__init__()
+        self.current_user = current_user
+        self.login_window = login_window
         self.current_user = current_user
         self.setWindowTitle("Видавництво — головне вікно")
         self.resize(1100, 720)
@@ -51,7 +57,6 @@ class MainWindow(QMainWindow):
         """)
         header_layout.addWidget(btn_logout)
 
-        # === 🟪 Панель користувача (вітання + “Додати користувача”) ===
         user_panel = QWidget()
         user_panel.setStyleSheet("background-color: #242424; padding: 12px 10px 12px 10px;")
         user_layout = QHBoxLayout(user_panel)
@@ -79,10 +84,8 @@ class MainWindow(QMainWindow):
             """)
             btn_add_user.clicked.connect(self.open_add_user)
             user_layout.addWidget(btn_add_user)
-
         user_layout.addStretch(1)
 
-        # === 🟨 Вкладки ===
         self.tabs = QTabWidget()
         self.tabs.setStyleSheet("""
             QTabBar::tab {
@@ -109,7 +112,6 @@ class MainWindow(QMainWindow):
             }
         """)
 
-        # --- вкладки
         self.authors_tab = AuthorsTab(self)
         self.tabs.addTab(self.authors_tab, "Автори")
 
@@ -125,11 +127,11 @@ class MainWindow(QMainWindow):
         self.orders_tab = OrdersTab(self)
         self.tabs.addTab(self.orders_tab, "Замовлення")
 
-        # --- Порожня вкладка для майбутньої аналітики
         self.analytics_tab = AnalyticsTab(self)
         self.tabs.addTab(self.analytics_tab, "Аналітика")
 
-        # === 🟩 Головний контейнер ===
+        self.user_panel_layout = user_layout
+
         central = QWidget()
         layout = QVBoxLayout(central)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -139,58 +141,142 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.tabs)
         self.setCentralWidget(central)
 
-        # === 🟫 Статусбар ===
         self.statusBar().setStyleSheet("background-color: #1b1b1b; color: #aaa;")
         self.statusBar().showMessage(
             f"Користувач: {self.current_user['login']} ({self.current_user['access_right']})"
         )
 
-        # застосувати права доступу
         self.apply_permission()
+
+        apply_common_shortcuts(
+            self,
+            help_text=(
+                "Головне вікно системи:\n"
+                "F1 — допомога\n"
+                "Enter — дія поточної вкладки\n"
+                "Esc — скасування / вихід із форми\n"
+                "Tab / Shift+Tab — стандартна навігація"
+            ),
+            on_confirm=self._handle_global_enter,
+            on_cancel=self._handle_global_escape
+        )
+
+    def _handle_global_enter(self):
+        fw = self.focusWidget()
+        if isinstance(fw, QAbstractButton):
+            fw.click()
+            return
+        current     = self.tabs.currentWidget()
+        if hasattr(current, "on_enter"):
+            current.on_enter()
+
+    def _handle_global_escape(self):
+        current = self.tabs.currentWidget()
+        if hasattr(current, "on_escape"):
+            current.on_escape()
+
+    def refresh_current_tab(self):
+        current_widget = self.tabs.currentWidget()
+        if hasattr(current_widget, "reload"):
+            current_widget.reload()
+        else:
+            QMessageBox.information(self, "Оновлення", "Для цієї вкладки оновлення не передбачено.")
 
     def open_add_user(self):
         dialog = AddUserWindow(self)
         dialog.exec()
 
     def handle_logout(self):
-        """Закриває головне вікно та повертає користувача на екран логіну."""
         from app.ui.login_window import LoginWindow
-        from app.main import on_login_success
         self.close()
-        self.login_window = LoginWindow(on_success=lambda u: on_login_success(u, self.login_window))
-        self.login_window.show()
+        self.next_login = LoginWindow()
+        self.next_login.on_success = lambda user, win=self.next_login: self.reopen_main_window(user, win)
+        self.next_login.show()
 
-    def reopen_main_window(self, user):
-        """Перезапускає головне вікно після повторного входу."""
-        self.login_window.close()
-        new_main = MainWindow(user)
+    def reopen_main_window(self, user, login_window):
+        login_window.close()
+        new_main = MainWindow(user, login_window=login_window)
         new_main.show()
 
     def apply_permission(self):
         role = self.current_user.get("access_right", "guest").lower()
         can_edit = role in ("admin", "operator")
+        can_cancel_order = role in ("admin", "operator")
+        can_see_analytics = role in ("admin", "operator", "authorized")
+        can_request_access = role == ("guest")
 
-        # Автори
-        self.authors_tab.btn_add.setEnabled(can_edit)
-        self.authors_tab.btn_edit.setEnabled(can_edit)
-        self.authors_tab.btn_del.setEnabled(can_edit)
+        for tab in [self.authors_tab, self.customer_tab,
+                self.publications_tab, self.printers_tab,
+                self.orders_tab]:
+            tab.btn_add.setEnabled(can_edit)
+            tab.btn_edit.setEnabled(can_edit)
+            tab.btn_del.setEnabled(can_edit)
 
-        # Замовники
-        self.customer_tab.btn_add.setEnabled(can_edit)
-        self.customer_tab.btn_edit.setEnabled(can_edit)
-        self.customer_tab.btn_del.setEnabled(can_edit)
+        for tab in [self.orders_tab]:
+            tab.btn_cancel_order.setEnabled(can_edit)
 
-        # Видання
-        self.publications_tab.btn_add.setEnabled(can_edit)
-        self.publications_tab.btn_edit.setEnabled(can_edit)
-        self.publications_tab.btn_del.setEnabled(can_edit)
+        analytics_index = self.tabs.indexOf(self.analytics_tab)
+        if not can_see_analytics:
+            self.tabs.removeTab(analytics_index)
 
-        # Друкарні
-        self.printers_tab.btn_add.setEnabled(can_edit)
-        self.printers_tab.btn_edit.setEnabled(can_edit)
-        self.printers_tab.btn_del.setEnabled(can_edit)
+        if can_request_access:
+            self.add_request_button()
 
-        #Замовлення
-        self.orders_tab.btn_add.setEnabled(can_edit)
-        self.orders_tab.btn_edit.setEnabled(can_edit)
-        self.orders_tab.btn_del.setEnabled(can_edit)
+        if role == "admin":
+            self.requests_tab = RequestsTab(self)
+            self.tabs.addTab(self.requests_tab, "Заявки")
+
+        if role in ("admin", "operator"):
+            btn_query = QPushButton("Створити власний аналітичний запит")
+            btn_query.clicked.connect(self.open_query_window)
+            self.user_panel_layout.addWidget(btn_query)
+
+        if role == "authorized":
+            btn_save = QPushButton("Зберегти результати аналітики")
+            btn_save.setStyleSheet("""
+                    QPushButton {
+                        background-color: #444;
+                        color: #ddd;
+                        border-radius: 6px;
+                        padding: 6px 10px;
+                    }
+                    QPushButton:hover { background-color: #5a5a5a; }
+                """)
+            btn_save.clicked.connect(lambda: self.analytics_tab.save_results())
+            self.user_panel_layout.addWidget(btn_save)
+
+            self.saved_tab = SavedAnalyticsTab(self)
+            self.tabs.addTab(self.saved_tab, "Мої збережені результати аналітики")
+
+    def add_request_button(self):
+        btn_request = QPushButton("Подати заявку на підвищення прав доступу")
+        btn_request.setStyleSheet("""
+                QPushButton {
+                    background-color: #444;
+                    color: #ddd;
+                    border-radius: 6px;
+                    padding: 6px 12px;
+                }
+                QPushButton:hover {
+                    background-color: #5a5a5a;
+                }
+            """)
+        btn_request.clicked.connect(lambda: self._send_access_request(request_access))
+        user_panel = self.centralWidget().layout().itemAt(1).widget()
+        layout = user_panel.layout()
+        layout.addWidget(btn_request)
+
+    def open_query_window(self):
+        self.query_win = QueryWindow()
+        self.query_win.show()
+
+    def _send_access_request(self, request_access_fn):
+        try:
+            request_access_fn(self.current_user["login"])
+            QMessageBox.information(
+                self,
+                "Заявку відправлено",
+                "Ваша заявка на підвищення прав відправлена адміністратору."
+            )
+        except Exception as e:
+            QMessageBox.critical(self, "Помилка", f"Не вдалося відправити заявку: {e}")

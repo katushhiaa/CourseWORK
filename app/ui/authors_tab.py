@@ -17,14 +17,12 @@ from app.repositories import authors_repo as R
 
 HEADERS = ["ID", "П.І.Б.", "Адреса", "Телефон", "Додаткова інформація"]
 
-
 class AuthorsTab(QWidget):
     data_updated = pyqtSignal()
     def __init__(self, parent=None):
         super().__init__(parent)
         root = QVBoxLayout(self)
 
-        # ── Пошук + кнопки
         top = QHBoxLayout()
         self.search_edit = QLineEdit(placeholderText="Пошук за П.І.Б.")
         self.btn_search = QPushButton("Пошук")
@@ -44,7 +42,6 @@ class AuthorsTab(QWidget):
         top.addWidget(self.btn_del)
         root.addLayout(top)
 
-        # ── Таблиця
         self.table = QTableWidget(0, len(HEADERS))
         self.table.setHorizontalHeaderLabels(HEADERS)
         self.table.setSelectionBehavior(self.table.SelectionBehavior.SelectRows)
@@ -53,7 +50,6 @@ class AuthorsTab(QWidget):
         self.table.setAlternatingRowColors(True)
         root.addWidget(self.table)
 
-        # ── Inline-форма
         self.form_box = QGroupBox("Форма автора")
         f = QFormLayout(self.form_box)
         self.inp_name = QLineEdit()
@@ -79,13 +75,10 @@ class AuthorsTab(QWidget):
         self.form_box.setVisible(False)
         root.addWidget(self.form_box)
 
-        # технічне
         self._mode: str | None = None
         self._edit_id: str | None = None
-
         self.reload()
 
-    # ── helpers
     def _current_id(self):
         rows = self.table.selectionModel().selectedRows()
         return self.table.item(rows[0].row(), 0).text() if rows else None
@@ -108,7 +101,6 @@ class AuthorsTab(QWidget):
                 self.table.setItem(r, c, it)
         self.table.resizeColumnsToContents()
 
-    # ── UI
     def mode_add(self):
         self._mode = "add"
         self._edit_id = None
@@ -173,3 +165,20 @@ class AuthorsTab(QWidget):
             R.delete_author(_id)
             self.reload()
             self.data_updated.emit()
+
+    def on_enter(self):
+        if self.form_box.isVisible():
+            self.save_form()
+        elif self.search_edit.hasFocus():
+            self.reload()
+        elif self.table.hasFocus():
+            self.mode_edit()
+        else:
+            self.mode_add()
+
+    def on_escape(self):
+        if self.form_box.isVisible():
+            self.cancel_form()
+        elif self.search_edit.text():
+            self.search_edit.clear()
+            self.reload()

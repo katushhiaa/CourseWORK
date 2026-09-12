@@ -2,13 +2,12 @@ from typing import Optional
 
 from app.classes.Entity import Entity
 
-
 class Customer(Entity):
     def __init__(
         self,
         type_: str,
-        name: str,  # ПІБ (для приватної особи) або назва організації"
-        contact_person: str,  # "ПІБ контактної особи (для орг. або за потреби)",
+        name: str,
+        contact_person: str,
         address: str,
         phone: str,
         fax: str,
@@ -47,7 +46,8 @@ class Customer(Entity):
 
     @contact_person.setter
     def contact_person(self, value: str):
-        self._contact_person = self.validate_length(value.strip(), "Контактна особа", 0, 100)
+        value = value.strip()
+        self._contact_person = self.validate_length(value, "Контактна особа", 0, 100)
 
     @property
     def address(self) -> str:
@@ -55,6 +55,7 @@ class Customer(Entity):
 
     @address.setter
     def address(self, value: str):
+        value = self.validate_required(value, "Адреса")
         self._address = self.validate_length(value.strip(), "Адреса", 0, 200)
 
     @property
@@ -63,10 +64,9 @@ class Customer(Entity):
 
     @phone.setter
     def phone(self, value: str):
-        if value.strip():
-            self._phone = self.validate_phone(value, "Телефон")
-        else:
-            self._phone = ""
+        value = self.validate_required(value, "Телефон")
+        value = value.strip()
+        self._phone = self.validate_phone(value, "Телефон")
 
     @property
     def fax(self) -> str:

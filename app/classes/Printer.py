@@ -2,9 +2,14 @@ from typing import Optional
 
 from app.classes.Entity import Entity
 
-
 class Printer(Entity):
-    def __init__(self, name: str, address: str, phone: str, _id: Optional[str] = None):
+    def __init__(
+        self,
+        name: str,
+        address: str,
+        phone: str,
+        _id: Optional[str] = None
+    ):
         self._id = _id
         self.name = name
         self.address = address

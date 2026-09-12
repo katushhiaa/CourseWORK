@@ -5,11 +5,13 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QDate
 from datetime import datetime
 from app.repositories import main_repo as AR
+from app.db import db
+
 
 class AnalyticsTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-
+        self.last_results = None
         root = QHBoxLayout()
 
         self.query_list = QListWidget()
@@ -27,31 +29,28 @@ class AnalyticsTab(QWidget):
         ])
         root.addWidget(self.query_list, 2)
 
-        # --- Права частина: результати
         self.results_table = QTableWidget()
         root.addWidget(self.results_table, 6)
 
-        # --- Верхня панель (дата / кнопка)
         top_bar = QHBoxLayout()
         self.date_from = QDateEdit(calendarPopup=True)
         self.date_from.setDate(QDate.currentDate().addMonths(-3))
         self.date_to = QDateEdit(calendarPopup=True)
         self.date_to.setDate(QDate.currentDate())
 
-        self.btn_run = QPushButton("Виконати запит")
-        self.btn_run.clicked.connect(self.run_selected_query)
+        self.btn_save = QPushButton("Зберегти результати аналітики")
+        self.btn_save.setEnabled(False)
+        self.btn_save.clicked.connect(self.save_results)
 
         top_bar.addWidget(QLabel("З:"))
         top_bar.addWidget(self.date_from)
         top_bar.addWidget(QLabel("По:"))
         top_bar.addWidget(self.date_to)
         top_bar.addStretch(1)
-        top_bar.addWidget(self.btn_run)
 
         layout = QVBoxLayout()
         layout.addLayout(top_bar)
         layout.addLayout(root)
-        # --- Темний стиль і відступи
         self.setStyleSheet("""
             QWidget {
                 background-color: #1f1f1f;
@@ -105,7 +104,6 @@ class AnalyticsTab(QWidget):
             }
         """)
 
-        # Відступ між панелями
         layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(10)
 
@@ -114,25 +112,31 @@ class AnalyticsTab(QWidget):
         self.results_table.verticalHeader().setVisible(False)
         self.results_table.horizontalHeader().setStretchLastSection(True)
         self.setLayout(layout)
+        self.query_list.itemClicked.connect(self.run_selected_query)
 
     def run_selected_query(self):
-        """Виконує обраний запит і відображає результат."""
         idx = self.query_list.currentRow()
         if idx < 0:
             QMessageBox.information(self, "Увага", "Оберіть запит із переліку.")
             return
 
         try:
-            # визначаємо, який саме запит запущено
             results, headers = self.execute_query_by_index(idx)
-            self.display_results(headers, results)
+            if results and headers:
+                self.display_results(headers, results)
+                self.last_results = {
+                    "query_index": idx + 1,
+                    "headers": headers,
+                    "data": results,
+                    "executed_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                }
+            self.btn_save.setEnabled(True)
         except Exception as e:
             QMessageBox.critical(self, "Помилка", str(e))
 
     def execute_query_by_index(self, idx: int):
-        """Викликає відповідну функцію з analytics_repo."""
         match idx:
-            case 0:  # автори
+            case 0:
                 data = AR.author_top_by_quarter()
                 headers = ["Автор", "Рік", "Квартал", "Кількість замовлень"]
                 rows = [
@@ -140,7 +144,7 @@ class AnalyticsTab(QWidget):
                     for d in data if d.get("_id")
                 ]
 
-            case 1:  # поточні замовлення
+            case 1:
                 data = AR.current_orders()
                 cust_map = {str(c["_id"]): c.get("name", "") for c in AR.CUSTOMERS.find({})}
                 headers = ["Номер", "Замовник", "Дата прийому", "Виконано"]
@@ -154,7 +158,7 @@ class AnalyticsTab(QWidget):
                     for o in data if o.get("order_number")
                 ]
 
-            case 2:  # загальний обсяг
+            case 2:
                 data = AR.total_sheet_volume_by_quarter()
                 headers = ["Рік", "Квартал", "Загальний обсяг"]
                 rows = [
@@ -162,7 +166,7 @@ class AnalyticsTab(QWidget):
                     for d in data if d.get("total_volume", 0) > 0
                 ]
 
-            case 3:  # друкарні
+            case 3:
                 data = AR.busiest_printers_by_month()
                 headers = ["Друкарня", "Рік", "Місяць", "Кількість замовлень"]
                 rows = [
@@ -170,7 +174,7 @@ class AnalyticsTab(QWidget):
                     for d in data if d.get("orders_count", 0) > 0
                 ]
 
-            case 4:  # кількість замовлень за період
+            case 4:
                 start = self.date_from.date().toPyDate()
                 end = self.date_to.date().toPyDate()
                 data = AR.orders_in_period(start, end)
@@ -181,12 +185,12 @@ class AnalyticsTab(QWidget):
                 ]
                 rows.append(["", "Всього:", data["total"]])
 
-            case 5:  # за видами продукції
+            case 5:
                 data = AR.orders_by_product_type()
                 headers = ["Тип продукції", "Кількість"]
                 rows = [[d.get("_id", ""), d.get("count", 0)] for d in data if d.get("count", 0) > 0]
 
-            case 6:  # Замовлення за авторами
+            case 6:
                 sample_author = AR.AUTHORS.find_one()
                 if not sample_author:
                     raise ValueError("У базі немає авторів.")
@@ -212,17 +216,17 @@ class AnalyticsTab(QWidget):
                 ]
                 rows.append(["", "", "Всього:", data["total"], "", ""])
 
-            case 7:  # скасовані замовлення
+            case 7:
                 data = AR.canceled_orders_breakdown()
                 headers = ["Статус", "Кількість"]
                 rows = [[d.get("_id", ""), d.get("count", 0)] for d in data["breakdown"] if d.get("count", 0) > 0]
 
-            case 8:  # за типом замовника
+            case 8:
                 data = AR.orders_by_customer_type()
                 headers = ["Тип замовника", "Кількість"]
                 rows = [[d.get("type", ""), d.get("count", 0)] for d in data if d.get("count", 0) > 0]
 
-            case 9:  # прибуток
+            case 9:
                 now = datetime.now()
                 data = AR.profit_by_month(now.year, now.month)
                 headers = ["Місяць", "Прибуток (грн)", "Кількість замовлень"]
@@ -231,10 +235,8 @@ class AnalyticsTab(QWidget):
             case _:
                 raise ValueError("Невідомий індекс запиту.")
 
-        # 🔹 прибираємо порожні рядки
         rows = [r for r in rows if any(v not in (None, "", [], {}) for v in r)]
 
-        # 🔹 якщо даних немає — показати повідомлення
         if not rows:
             QMessageBox.information(self, "Результат", "Немає даних для відображення.")
             return [], headers
@@ -242,7 +244,6 @@ class AnalyticsTab(QWidget):
         return rows, headers
 
     def display_results(self, headers, data):
-        """Відображає дані в таблиці."""
         self.results_table.clear()
         self.results_table.setColumnCount(len(headers))
         self.results_table.setRowCount(len(data))
@@ -253,3 +254,30 @@ class AnalyticsTab(QWidget):
                 self.results_table.setItem(r, c, QTableWidgetItem(str(val)))
 
         self.results_table.resizeColumnsToContents()
+
+    def save_results(self):
+        if not self.last_results:
+            QMessageBox.warning(self, "Немає даних", "Спочатку виконайте аналітику.")
+            return
+
+        try:
+            db["saved_analytics"].insert_one(self.last_results)
+            QMessageBox.information(self, "Збережено", "Результати аналітики успішно збережено.")
+        except Exception as e:
+            QMessageBox.critical(self, "Помилка", f"Не вдалося зберегти: {e}")
+
+    def on_enter(self):
+        if self.query_list.hasFocus() or self.date_from.hasFocus() or self.date_to.hasFocus():
+            self.run_selected_query()
+            return
+
+        if self.btn_save.isEnabled() and self.results_table.rowCount() > 0:
+            self.save_results()
+            return
+
+        QMessageBox.information(self, "Увага", "Оберіть запит або виконайте аналітику.")
+
+    def on_escape(self):
+        self.query_list.clearSelection()
+        self.results_table.clear()
+        self.btn_save.setEnabled(False)

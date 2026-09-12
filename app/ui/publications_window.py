@@ -20,13 +20,11 @@ from app.repositories import authors_repo as RA, publications_repo as RP
 
 HEADERS = ["ID", "Код", "Назва", "Автори", "Обсяг (арк.)", "Тираж", "Номер замовлення"]
 
-
 class PublicationsTab(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         root = QVBoxLayout(self)
 
-        # ── Пошук + кнопки
         top = QHBoxLayout()
         self.search_edit = QLineEdit(placeholderText="Пошук за назвою або кодом")
         self.btn_search = QPushButton("Пошук")
@@ -45,7 +43,6 @@ class PublicationsTab(QWidget):
         top.addWidget(self.btn_del)
         root.addLayout(top)
 
-        # ── Таблиця
         self.table = QTableWidget(0, len(HEADERS))
         self.table.setHorizontalHeaderLabels(HEADERS)
         self.table.setSelectionBehavior(self.table.SelectionBehavior.SelectRows)
@@ -54,11 +51,9 @@ class PublicationsTab(QWidget):
         self.table.setAlternatingRowColors(True)
         root.addWidget(self.table)
 
-        # ── Кеш авторів
         self._authors_cache: list[Author] = RA.list_authors("")
         self._authors_map = {str(a._id): a.full_name for a in self._authors_cache}
 
-        # ── Інлайн-форма
         self.form_box = QGroupBox("Форма видання")
         f = QFormLayout(self.form_box)
         self.inp_code = QLineEdit()
@@ -93,20 +88,16 @@ class PublicationsTab(QWidget):
         f.addRow(btn_row)
 
         self.form_box.setVisible(False)
-        root.addWidget(self.form_box)  # <- додали в layout
+        root.addWidget(self.form_box)
 
-        # технічне
-        self._mode: str | None = None  # "add" / "edit"
+        self._mode: str | None = None
         self._edit_id: str | None = None
 
         self.reload()
 
-    # ── helpers
-
     def _reload_authors_list(self, selected_ids: list[str] = None):
-        """Перезавантажити список авторів у QListWidget"""
         self.list_authors.clear()
-        self._authors_cache = RA.list_authors("")  # 🔧 ЗМІНА: оновлюємо з бази
+        self._authors_cache = RA.list_authors("")
         self._authors_map = {str(a._id): a.full_name for a in self._authors_cache}
 
         for a in self._authors_cache:
@@ -132,9 +123,7 @@ class PublicationsTab(QWidget):
     def _get_selected_authors(self) -> list[str]:
         return [str(it.data(Qt.ItemDataRole.UserRole)) for it in self.list_authors.selectedItems()]
 
-    # ── UI
     def reload(self):
-        # 🔧 ЗМІНА: оновлюємо кеш авторів при кожному reload
         self._authors_cache = RA.list_authors("")
         self._authors_map = {str(a._id): a.full_name for a in self._authors_cache}
 
@@ -154,8 +143,8 @@ class PublicationsTab(QWidget):
                 it = QTableWidgetItem(val)
                 if c == 0:
                     it.setFlags(Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled)
-                self.table.setItem(r, c, it)  # <- ставимо item для КОЖНОЇ колонки
-        self.table.resizeColumnsToContents()  # <- після циклу
+                self.table.setItem(r, c, it)
+        self.table.resizeColumnsToContents()
 
     def mode_add(self):
         self._mode = "add"
@@ -182,7 +171,7 @@ class PublicationsTab(QWidget):
             QMessageBox.warning(self, "Увага", "Не вдалося завантажити документ.")
             return
 
-        self._reload_authors_list(pub.authors)  # 🔧 ЗМІНА: підсвічуємо потрібних авторів
+        self._reload_authors_list(pub.authors)
         self.inp_code.setText(pub.code)
         self.inp_title.setText(pub.title)
         self._set_selected_authors(pub.authors)
@@ -254,3 +243,20 @@ class PublicationsTab(QWidget):
                 self.reload()
             except Exception as e:
                 QMessageBox.critical(self, "Помилка", f"Не вдалося видалити:\n{e}")
+
+    def on_enter(self):
+        if self.form_box.isVisible():
+            self.save_form()
+        elif self.search_edit.hasFocus():
+            self.reload()
+        elif self.table.hasFocus():
+            self.mode_edit()
+        else:
+            self.mode_add()
+
+    def on_escape(self):
+        if self.form_box.isVisible():
+            self.cancel_form()
+        elif self.search_edit.text():
+            self.search_edit.clear()
+            self.reload()

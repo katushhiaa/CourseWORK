@@ -8,27 +8,21 @@ PUBLICATIONS = db["publications"]
 CUSTOMERS = db["customers"]
 PRINTERS = db["printers"]
 AUTHORS = db["authors"]
+RATE_PER_SHEET = 10.0
 
-def _mk_dt(dt: Optional[datetime | str]) -> Optional[datetime]:
+def normalize_datetime(dt: Optional[datetime | str]) -> Optional[datetime]:
     if not dt:
         return None
     if isinstance(dt, datetime):
         return dt
-    if hasattr(dt, "year"):  # якщо це datetime.date
+    if hasattr(dt, "year"):
         return datetime(dt.year, dt.month, dt.day)
     return datetime.fromisoformat(str(dt))
 
-
-# 1) Автори, чиї книги найчастіше друкуються — по кварталах
 def author_top_by_quarter() -> List[Dict[str, Any]]:
     pipeline = [
-        # 1️⃣ Беремо тільки замовлення, де є публікації
         {"$match": {"publication_ids": {"$exists": True, "$ne": []}}},
-
-        # 2️⃣ Розпаковуємо масив publication_ids
         {"$unwind": "$publication_ids"},
-
-        # 3️⃣ Конвертуємо рядкові ObjectId у справжні ObjectId
         {"$addFields": {
             "pub_obj_id": {
                 "$cond": {
@@ -38,8 +32,6 @@ def author_top_by_quarter() -> List[Dict[str, Any]]:
                 }
             }
         }},
-
-        # 4️⃣ Підтягнемо самі публікації
         {"$lookup": {
             "from": "publications",
             "localField": "pub_obj_id",
@@ -47,8 +39,6 @@ def author_top_by_quarter() -> List[Dict[str, Any]]:
             "as": "publication"
         }},
         {"$unwind": "$publication"},
-
-        # 5️⃣ Конвертуємо publication.authors у ObjectId (бо це масив рядків)
         {"$addFields": {
             "author_obj_id": {
                 "$cond": {
@@ -70,11 +60,7 @@ def author_top_by_quarter() -> List[Dict[str, Any]]:
                 }
             }
         }},
-
-        # 6️⃣ Розпаковуємо авторів
         {"$unwind": "$author_obj_id"},
-
-        # 7️⃣ Підтягуємо дані про автора
         {"$lookup": {
             "from": "authors",
             "localField": "author_obj_id",
@@ -82,14 +68,10 @@ def author_top_by_quarter() -> List[Dict[str, Any]]:
             "as": "auth"
         }},
         {"$unwind": "$auth"},
-
-        # 8️⃣ Додаємо рік і квартал
         {"$addFields": {
             "year": {"$year": "$date_received"},
             "quarter": {"$ceil": {"$divide": [{"$month": "$date_received"}, 3]}}
         }},
-
-        # 9️⃣ Групуємо: по автору, року, кварталу
         {"$group": {
             "_id": {
                 "author_id": "$auth._id",
@@ -99,23 +81,15 @@ def author_top_by_quarter() -> List[Dict[str, Any]]:
             },
             "orders_count": {"$sum": 1}
         }},
-
-        # 🔟 Сортуємо по часу і кількості
         {"$sort": {"_id.y": 1, "_id.q": 1, "orders_count": -1}}
     ]
 
     return list(ORDERS.aggregate(pipeline))
 
-
-
-
-# 2) Поточні замовлення (в роботі)
 def current_orders() -> List[Dict[str, Any]]:
     q = {"is_completed": False}
     return list(ORDERS.find(q).sort("date_received", 1))
 
-
-# 3) Загальний обсяг у друк. аркушах за квартали
 def total_sheet_volume_by_quarter() -> List[Dict[str, Any]]:
     pipeline = [
         {"$match": {"publication_ids": {"$exists": True, "$ne": []}}},
@@ -155,8 +129,6 @@ def total_sheet_volume_by_quarter() -> List[Dict[str, Any]]:
     ]
     return list(ORDERS.aggregate(pipeline))
 
-
-# 4) Найбільш завантажені друкарні по місяцях
 def busiest_printers_by_month(
     dt_from: Optional[datetime] = None,
     dt_to: Optional[datetime] = None
@@ -165,14 +137,12 @@ def busiest_printers_by_month(
     if dt_from or dt_to:
         match_stage["date_received"] = {}
         if dt_from:
-            match_stage["date_received"]["$gte"] = _mk_dt(dt_from)
+            match_stage["date_received"]["$gte"] = normalize_datetime(dt_from)
         if dt_to:
-            match_stage["date_received"]["$lte"] = _mk_dt(dt_to)
+            match_stage["date_received"]["$lte"] = normalize_datetime(dt_to)
 
     pipeline = [
         {"$match": match_stage},
-
-        # 1️⃣ Конвертуємо printer_id з рядка в ObjectId
         {"$addFields": {
             "printer_obj_id": {
                 "$cond": {
@@ -184,14 +154,10 @@ def busiest_printers_by_month(
             "y": {"$year": "$date_received"},
             "m": {"$month": "$date_received"}
         }},
-
-        # 2️⃣ Групуємо по друкарні, році, місяцю
         {"$group": {
             "_id": {"printer_id": "$printer_obj_id", "y": "$y", "m": "$m"},
             "orders_count": {"$sum": 1}
         }},
-
-        # 3️⃣ Підтягуємо дані друкарні
         {"$lookup": {
             "from": "printers",
             "localField": "_id.printer_id",
@@ -199,8 +165,6 @@ def busiest_printers_by_month(
             "as": "printer"
         }},
         {"$unwind": {"path": "$printer", "preserveNullAndEmptyArrays": False}},
-
-        # 4️⃣ Формуємо фінальний вигляд
         {"$project": {
             "printer": "$printer.name",
             "year": "$_id.y",
@@ -213,15 +177,11 @@ def busiest_printers_by_month(
 
     return list(ORDERS.aggregate(pipeline))
 
-
-# 5) Замовлення за період
 def orders_in_period(dt_from: datetime, dt_to: datetime) -> Dict[str, Any]:
-    q = {"date_received": {"$gte": _mk_dt(dt_from), "$lte": _mk_dt(dt_to)}}
+    q = {"date_received": {"$gte": normalize_datetime(dt_from), "$lte": normalize_datetime(dt_to)}}
     docs = list(ORDERS.find(q).sort("date_received", 1))
     return {"total": len(docs), "items": docs}
 
-
-# 6) Замовлення за видами продукції
 def orders_by_product_type() -> List[Dict[str, Any]]:
     pipeline = [
         {"$group": {"_id": "$product_type", "count": {"$sum": 1}}},
@@ -229,15 +189,10 @@ def orders_by_product_type() -> List[Dict[str, Any]]:
     ]
     return list(ORDERS.aggregate(pipeline))
 
-
-# 7) Замовлення за участю певного автора
 def orders_by_author(author_id: str) -> Dict[str, Any]:
     pipeline = [
-        # 1️⃣ Беремо тільки ті, де є публікації
         {"$match": {"publication_ids": {"$exists": True, "$ne": []}}},
         {"$unwind": "$publication_ids"},
-
-        # 2️⃣ Конвертуємо publication_ids у ObjectId
         {"$addFields": {
             "pub_obj_id": {
                 "$cond": {
@@ -247,8 +202,6 @@ def orders_by_author(author_id: str) -> Dict[str, Any]:
                 }
             }
         }},
-
-        # 3️⃣ Підтягуємо публікації
         {"$lookup": {
             "from": "publications",
             "localField": "pub_obj_id",
@@ -256,8 +209,6 @@ def orders_by_author(author_id: str) -> Dict[str, Any]:
             "as": "publication"
         }},
         {"$unwind": "$publication"},
-
-        # 4️⃣ Конвертуємо authors у ObjectId (бо це масив рядків)
         {"$addFields": {
             "author_obj_id": {
                 "$map": {
@@ -273,11 +224,7 @@ def orders_by_author(author_id: str) -> Dict[str, Any]:
                 }
             }
         }},
-
-        # 5️⃣ Фільтруємо тільки ті публікації, де є наш автор
         {"$match": {"author_obj_id": {"$in": [ObjectId(author_id)]}}},
-
-        # 6️⃣ Групуємо по замовленню, збираємо всі назви видань
         {"$group": {
             "_id": "$_id",
             "order_number": {"$first": "$order_number"},
@@ -285,8 +232,6 @@ def orders_by_author(author_id: str) -> Dict[str, Any]:
             "date_received": {"$first": "$date_received"},
             "is_completed": {"$first": "$is_completed"}
         }},
-
-        # 7️⃣ Форматуємо в зручний вигляд
         {"$project": {
             "_id": 1,
             "order_number": 1,
@@ -296,13 +241,9 @@ def orders_by_author(author_id: str) -> Dict[str, Any]:
         }},
         {"$sort": {"date_received": -1}}
     ]
-
     items = list(ORDERS.aggregate(pipeline))
     return {"total": len(items), "items": items}
 
-
-
-# 8) Скасовані замовлення
 def canceled_orders_breakdown() -> Dict[str, Any]:
     reasons = ["неоплата", "відміна замовником"]
     pipeline = [
@@ -314,8 +255,6 @@ def canceled_orders_breakdown() -> Dict[str, Any]:
     items = list(ORDERS.find({"cancel_reason": {"$in": reasons}}))
     return {"breakdown": totals, "items": items}
 
-
-# 9) Кількість замовлень від приватних осіб та організацій
 def orders_by_customer_type() -> List[Dict[str, Any]]:
     pipeline = [
         {
@@ -344,10 +283,6 @@ def orders_by_customer_type() -> List[Dict[str, Any]]:
     ]
 
     return list(ORDERS.aggregate(pipeline))
-
-
-# 10) Прибуток за місяць
-RATE_PER_SHEET = 10.0
 
 def profit_by_month(year: int, month: int) -> Dict[str, Any]:
     pipeline = [

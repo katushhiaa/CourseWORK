@@ -4,7 +4,6 @@ from PyQt6.QtWidgets import (
     QListWidgetItem, QDateEdit, QCheckBox
 )
 from PyQt6.QtCore import Qt, QDate
-from datetime import date
 from app.repositories import orders_repo as RO
 from app.repositories import customers_repo as RC
 from app.repositories import publications_repo as RP
@@ -24,21 +23,18 @@ class OrdersTab(QWidget):
         super().__init__(parent)
         root = QVBoxLayout(self)
 
-        # ── Пошук + кнопки
         top = QHBoxLayout()
         self.search_edit = QLineEdit(placeholderText="Пошук за номером або видом продукції")
         self.btn_search = QPushButton("Пошук"); self.btn_search.clicked.connect(self.reload)
         self.btn_add = QPushButton("Додати"); self.btn_add.clicked.connect(self.mode_add)
         self.btn_edit = QPushButton("Редагувати"); self.btn_edit.clicked.connect(self.mode_edit)
         self.btn_del = QPushButton("Видалити"); self.btn_del.clicked.connect(self.delete_selected)
-        self.btn_cancel_order = QPushButton("Скасувати");self.btn_cancel_order.clicked.connect(self.cancel_order_dialog)
-        top.addWidget(self.btn_cancel_order)
+        self.btn_cancel_order = QPushButton("Скасувати замовлення");self.btn_cancel_order.clicked.connect(self.cancel_order_dialog)
         top.addWidget(self.search_edit); top.addWidget(self.btn_search)
         top.addStretch(1)
-        top.addWidget(self.btn_add); top.addWidget(self.btn_edit); top.addWidget(self.btn_del)
+        top.addWidget(self.btn_add); top.addWidget(self.btn_edit); top.addWidget(self.btn_del); top.addWidget(self.btn_cancel_order)
         root.addLayout(top)
 
-        # ── Таблиця
         self.table = QTableWidget(0, len(HEADERS))
         self.table.setHorizontalHeaderLabels(HEADERS)
         self.table.setSelectionBehavior(self.table.SelectionBehavior.SelectRows)
@@ -47,7 +43,6 @@ class OrdersTab(QWidget):
         self.table.setAlternatingRowColors(True)
         root.addWidget(self.table)
 
-        # ── Кешування (порожні списки, щоб не падало при ініціалізації)
         self._customers = []
         self._customers_map = {}
         self._publications = []
@@ -55,7 +50,6 @@ class OrdersTab(QWidget):
         self._printers = []
         self._printers_map = {}
 
-        # ── Форма
         self.form_box = QGroupBox("Форма замовлення")
         f = QFormLayout(self.form_box)
         self.inp_number = QLineEdit()
@@ -108,7 +102,6 @@ class OrdersTab(QWidget):
 
         self.reload()
 
-    # ── Helper-и
     def _selected_id(self):
         rows = self.table.selectionModel().selectedRows()
         return self.table.item(rows[0].row(), 0).text() if rows else None
@@ -125,9 +118,7 @@ class OrdersTab(QWidget):
     def _pub_titles(self, ids: list[str]) -> str:
         return ", ".join(self._publications_map.get(i, i) for i in ids)
 
-    # ── UI
     def reload(self):
-        # 🔄 скидати кеш перед оновленням
         self._customers.clear()
         self._customers_map.clear()
         self._publications.clear()
@@ -135,7 +126,6 @@ class OrdersTab(QWidget):
         self._printers.clear()
         self._printers_map.clear()
 
-        #кешування (отримуємо свіжі дані з бази)
         self._customers = RC.list_customers()
         self._customers_map = {str(c._id): c.name for c in self._customers}
 
@@ -145,12 +135,9 @@ class OrdersTab(QWidget):
         self._printers = RPR.list_printers()
         self._printers_map = {str(p._id): p.name for p in self._printers}
 
-        # оновлюємо таблицю замовлень
         data = RO.list_orders(self.search_edit.text().strip())
         self.table.setRowCount(len(data))
 
-        data = RO.list_orders(self.search_edit.text().strip())
-        self.table.setRowCount(len(data))
         for r, order in enumerate(data):
             row = [
                 str(order._id or ""),
@@ -173,7 +160,6 @@ class OrdersTab(QWidget):
 
     def mode_add(self):
         self._mode = "add"; self._edit_id = None
-        # Оновлюємо списки просто тут
         self.cmb_customer.clear()
         for c in RC.list_customers():
             self.cmb_customer.addItem(c.name, str(c._id))
@@ -212,7 +198,6 @@ class OrdersTab(QWidget):
             return
 
         self._mode = "edit"; self._edit_id = _id
-        # Просто перезавантажуємо списки перед показом форми
         self.cmb_customer.clear()
         for c in RC.list_customers():
             self.cmb_customer.addItem(c.name, str(c._id))
@@ -228,19 +213,16 @@ class OrdersTab(QWidget):
             it.setSelected(str(pub._id) in order.publication_ids)
             self.list_publications.addItem(it)
 
-        # Заповнюємо поля
         self.inp_number.setText(order.order_number)
         self.inp_product.setText(order.product_type)
         self.chk_completed.setChecked(order.is_completed)
 
-        # Встановлюємо замовника і друкарню
         idx = self.cmb_customer.findData(order.customer_id)
         self.cmb_customer.setCurrentIndex(idx if idx >= 0 else 0)
 
         idx = self.cmb_printer.findData(order.printer_id)
         self.cmb_printer.setCurrentIndex(idx if idx >= 0 else 0)
 
-        # Дати
         self.date_received.setDate(QDate(order.date_received.year, order.date_received.month, order.date_received.day))
         if order.date_completed:
             self.date_completed.setDate(
@@ -254,6 +236,13 @@ class OrdersTab(QWidget):
         self._mode = None; self._edit_id = None
 
     def save_form(self):
+        d_received = self.date_received.date().toPyDate()
+        d_completed = self.date_completed.date().toPyDate()
+
+        if d_completed < d_received:
+            QMessageBox.warning(self, "Помилка\n", "Дата виконання не може бути раніше за дату прийому.")
+            return
+
         try:
             order = Order(
                 order_number=self.inp_number.text().strip(),
@@ -281,10 +270,8 @@ class OrdersTab(QWidget):
             self.reload()
             self.cancel_form()
 
-            # ✅ Спроба оновити вкладку "Видання"
             mw = self.window()
             if hasattr(mw, "publications_tab"):
-                print("✅ Оновлюю publications_tab")
                 mw.publications_tab.reload()
 
         except Exception as e:
@@ -318,5 +305,21 @@ class OrdersTab(QWidget):
             except Exception as e:
                 QMessageBox.critical(self, "Помилка", str(e))
 
+    def on_enter(self):
+        if self.form_box.isVisible():
+            self.save_form()
+        elif self.search_edit.hasFocus():
+            self.reload()
+        elif self.table.hasFocus():
+            self.mode_edit()
+        else:
+            self.mode_add()
+
+    def on_escape(self):
+        if self.form_box.isVisible():
+            self.cancel_form()
+        elif self.search_edit.text():
+            self.search_edit.clear()
+            self.reload()
 
 

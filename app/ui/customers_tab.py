@@ -18,14 +18,12 @@ from app.repositories import customers_repo as R
 
 HEADERS = ["ID", "Тип", "Назва / ПІБ", "Контактна особа", "Адреса", "Телефон", "Факс"]
 
-
 class CustomersTab(QWidget):
     data_updated = pyqtSignal()
     def __init__(self, parent=None):
         super().__init__(parent)
-        root = QVBoxLayout(self)  # 🔧 прив'язуємо layout до віджета
+        root = QVBoxLayout(self)
 
-        # ── Пошук + фільтр + кнопки
         top = QHBoxLayout()
         self.search_edit = QLineEdit(placeholderText="Пошук: назва/ПІБ, контакт, телефон")
         self.type_filter = QComboBox()
@@ -48,7 +46,6 @@ class CustomersTab(QWidget):
         top.addWidget(self.btn_del)
         root.addLayout(top)
 
-        # ── Таблиця (була відсутня)
         self.table = QTableWidget(0, len(HEADERS))
         self.table.setHorizontalHeaderLabels(HEADERS)
         self.table.setSelectionBehavior(self.table.SelectionBehavior.SelectRows)
@@ -57,7 +54,6 @@ class CustomersTab(QWidget):
         self.table.setAlternatingRowColors(True)
         root.addWidget(self.table)
 
-        # ── Інлайн-форма
         self.form_box = QGroupBox("Форма")
         f = QFormLayout(self.form_box)
         self.inp_type = QComboBox()
@@ -87,12 +83,14 @@ class CustomersTab(QWidget):
         self.form_box.setVisible(False)
         root.addWidget(self.form_box)
 
-        # технічні прапори
-        self._mode: str | None = None  # "add" / "edit"
+        self._mode: str | None = None
         self._edit_id: str | None = None
 
-        # 🔧 reload тільки після створення таблиці/форми
         self.reload()
+
+    def _current_id(self):
+        rows = self.table.selectionModel().selectedRows()
+        return self.table.item(rows[0].row(), 0).text() if rows else None
 
     def reload(self):
         filt = self.search_edit.text().strip()
@@ -121,11 +119,7 @@ class CustomersTab(QWidget):
                     it.setFlags(Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled)
                 self.table.setItem(r, col, it)
 
-        self.table.resizeColumnsToContents()  # 🔧 після циклу
-
-    def _current_id(self):
-        rows = self.table.selectionModel().selectedRows()
-        return self.table.item(rows[0].row(), 0).text() if rows else None
+        self.table.resizeColumnsToContents()
 
     def mode_add(self):
         self._mode = "add"
@@ -157,7 +151,7 @@ class CustomersTab(QWidget):
         self.inp_type.setCurrentText(t)
         self.inp_name.setText(name)
         self.inp_contact.setText(contact)
-        self.inp_addr.setText(address)  # 🔧 було self.inp_phone
+        self.inp_addr.setText(address)
         self.inp_phone.setText(phone)
         self.inp_fax.setText(fax)
 
@@ -216,3 +210,20 @@ class CustomersTab(QWidget):
                 self.data_updated.emit()
             except Exception as e:
                 QMessageBox.critical(self, "Помилка", f"Не вдалося видалити:\n{e}")
+
+    def on_enter(self):
+        if self.form_box.isVisible():
+            self.save_form()
+        elif self.search_edit.hasFocus() or self.type_filter.hasFocus():
+            self.reload()
+        elif self.table.hasFocus():
+            self.mode_edit()
+        else:
+            self.mode_add()
+
+    def on_escape(self):
+        if self.form_box.isVisible():
+            self.cancel_form()
+        elif self.search_edit.text():
+            self.search_edit.clear()
+            self.reload()

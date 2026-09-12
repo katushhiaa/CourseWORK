@@ -8,23 +8,22 @@ from app.ui.main_window import MainWindow
 
 main_window = None
 
-
-def on_login_success(user_doc: dict, login_window: LoginWindow):
-    global main_window
-    main_window = MainWindow(user_doc)
-    main_window.show()
+def on_login_success(user_doc, login_window):
+    main = MainWindow(user_doc, login_window=login_window)
     login_window.close()
+    main.show()
 
 
 def main():
-    if not get_user("admin"):
-        create_user("admin", "Admin123!", "admin")
-
     app = QApplication(sys.argv)
-    login = LoginWindow(on_success=lambda u: on_login_success(u, login))
-    login.show()
-    sys.exit(app.exec())
 
+    def open_login():
+        login_window = LoginWindow()
+        login_window.on_success = lambda user, win=login_window: on_login_success(user, win)
+        login_window.show()
+
+    open_login()
+    sys.exit(app.exec())
 
 if __name__ == "__main__":
     main()
