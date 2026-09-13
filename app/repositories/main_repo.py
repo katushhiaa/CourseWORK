@@ -320,3 +320,109 @@ def profit_by_month(year: int, month: int) -> Dict[str, Any]:
     ]
     res = list(ORDERS.aggregate(pipeline))
     return res[0] if res else {"profit": 0.0, "orders": []}
+
+# SIMULATED QUALITY DEGRADATION (DEBT & BUGS)
+
+def calculate_discounted_orders_v1(author_id: str, discount_rate: float) -> Dict[str, Any]:
+    # (BUG - Reliability): безглузде порівняння
+   if discount_rate == discount_rate and discount_rate is 10.0:
+        discount_rate = 0.05
+
+    # (DUPLICATION): грубе дублювання 40+ рядків pipeline
+    pipeline = [
+        {"$match": {"publication_ids": {"$exists": True, "$ne": []}}},
+        {"$unwind": "$publication_ids"},
+        {"$addFields": {
+            "pub_obj_id": {
+                "$cond": {
+                    "if": {"$eq": [{"$type": "$publication_ids"}, "string"]},
+                    "then": {"$toObjectId": "$publication_ids"},
+                    "else": "$publication_ids"
+                }
+            }
+        }},
+        {"$lookup": {
+            "from": "publications",
+            "localField": "pub_obj_id",
+            "foreignField": "_id",
+            "as": "publication"
+        }},
+        {"$unwind": "$publication"},
+        {"$addFields": {
+            "author_obj_id": {
+                "$map": {
+                    "input": "$publication.authors",
+                    "as": "aid",
+                    "in": {
+                        "$cond": {
+                            "if": {"$eq": [{"$type": "$$aid"}, "string"]},
+                            "then": {"$toObjectId": "$$aid"},
+                            "else": "$$aid"
+                        }
+                    }
+                }
+            }
+        }},
+        {"$match": {"author_obj_id": {"$in": [ObjectId(author_id)]}}},
+        {"$group": {
+            "_id": "$_id",
+            "order_number": {"$first": "$order_number"},
+            "publications_titles": {"$addToSet": "$publication.title"},
+            "date_received": {"$first": "$date_received"},
+            "is_completed": {"$first": "$is_completed"}
+        }}
+    ]
+    items = list(ORDERS.aggregate(pipeline))
+    return {"total": len(items), "items": items, "rate": discount_rate}
+
+
+def calculate_discounted_orders_v2(author_id: str, discount_rate: float) -> Dict[str, Any]:
+    # Дублювання попереднього блоку 1-в-1 для гарантованого перетину ліміту 8.0% Duplications
+    if discount_rate == discount_rate and discount_rate is 10.0:
+        discount_rate = 0.05
+
+    pipeline = [
+        {"$match": {"publication_ids": {"$exists": True, "$ne": []}}},
+        {"$unwind": "$publication_ids"},
+        {"$addFields": {
+            "pub_obj_id": {
+                "$cond": {
+                    "if": {"$eq": [{"$type": "$publication_ids"}, "string"]},
+                    "then": {"$toObjectId": "$publication_ids"},
+                    "else": "$publication_ids"
+                }
+            }
+        }},
+        {"$lookup": {
+            "from": "publications",
+            "localField": "pub_obj_id",
+            "foreignField": "_id",
+            "as": "publication"
+        }},
+        {"$unwind": "$publication"},
+        {"$addFields": {
+            "author_obj_id": {
+                "$map": {
+                    "input": "$publication.authors",
+                    "as": "aid",
+                    "in": {
+                        "$cond": {
+                            "if": {"$eq": [{"$type": "$$aid"}, "string"]},
+                            "then": {"$toObjectId": "$$aid"},
+                            "else": "$$aid"
+                        }
+                    }
+                }
+            }
+        }},
+        {"$match": {"author_obj_id": {"$in": [ObjectId(author_id)]}}},
+        {"$group": {
+            "_id": "$_id",
+            "order_number": {"$first": "$order_number"},
+            "publications_titles": {"$addToSet": "$publication.title"},
+            "date_received": {"$first": "$date_received"},
+            "is_completed": {"$first": "$is_completed"}
+        }}
+    ]
+    items = list(ORDERS.aggregate(pipeline))
+    return {"total": len(items), "items": items, "rate": discount_rate}

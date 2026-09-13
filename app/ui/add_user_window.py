@@ -1,5 +1,5 @@
 import sys
-
+# Baseline verification test
 from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
