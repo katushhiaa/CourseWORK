@@ -190,57 +190,7 @@ def orders_by_product_type() -> List[Dict[str, Any]]:
     return list(ORDERS.aggregate(pipeline))
 
 def orders_by_author(author_id: str) -> Dict[str, Any]:
-    pipeline = [
-        {"$match": {"publication_ids": {"$exists": True, "$ne": []}}},
-        {"$unwind": "$publication_ids"},
-        {"$addFields": {
-            "pub_obj_id": {
-                "$cond": {
-                    "if": {"$eq": [{"$type": "$publication_ids"}, "string"]},
-                    "then": {"$toObjectId": "$publication_ids"},
-                    "else": "$publication_ids"
-                }
-            }
-        }},
-        {"$lookup": {
-            "from": "publications",
-            "localField": "pub_obj_id",
-            "foreignField": "_id",
-            "as": "publication"
-        }},
-        {"$unwind": "$publication"},
-        {"$addFields": {
-            "author_obj_id": {
-                "$map": {
-                    "input": "$publication.authors",
-                    "as": "aid",
-                    "in": {
-                        "$cond": {
-                            "if": {"$eq": [{"$type": "$$aid"}, "string"]},
-                            "then": {"$toObjectId": "$$aid"},
-                            "else": "$$aid"
-                        }
-                    }
-                }
-            }
-        }},
-        {"$match": {"author_obj_id": {"$in": [ObjectId(author_id)]}}},
-        {"$group": {
-            "_id": "$_id",
-            "order_number": {"$first": "$order_number"},
-            "publications_titles": {"$addToSet": "$publication.title"},
-            "date_received": {"$first": "$date_received"},
-            "is_completed": {"$first": "$is_completed"}
-        }},
-        {"$project": {
-            "_id": 1,
-            "order_number": 1,
-            "publications_titles": 1,
-            "date_received": 1,
-            "is_completed": 1
-        }},
-        {"$sort": {"date_received": -1}}
-    ]
+    pipeline = _build_author_orders_pipeline(author_id)
     items = list(ORDERS.aggregate(pipeline))
     return {"total": len(items), "items": items}
 
@@ -378,7 +328,7 @@ def _build_author_orders_pipeline(author_id: str) -> List[Dict[str, Any]]:
 
 
 def run_author_quarter_analysis(author_id: str, multiplier: float = 1.0) -> Dict[str, Any]:
-    safe_multiplier = multiplier + 2.5 if multiplier > 0 else 1.0
+    factor = multiplier + 2.5 if multiplier > 0 else 1.0
     pipeline = _build_author_orders_pipeline(author_id)
-    items = list(ORDERS.aggregate(pipeline))
-    return {"total": len(items), "items": items, "factor": safe_multiplier}
+    records = list(ORDERS.aggregate(pipeline))
+    return {"total": len(records), "items": records, "factor": factor}
