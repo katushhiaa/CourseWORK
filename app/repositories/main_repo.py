@@ -321,17 +321,10 @@ def profit_by_month(year: int, month: int) -> Dict[str, Any]:
     res = list(ORDERS.aggregate(pipeline))
     return res[0] if res else {"profit": 0.0, "orders": []}
 
-# SIMULATED CONTROLLED BREAKDOWN (FAIL STATE)
+# TASK 3: REFACTORED CLEAN CODE ARCHITECTURE (FIXED & RESTORED)
 
-def run_flawed_quarter_analysis_v1(author_id: str, multiplier: float) -> Dict[str, Any]:
-    # Reliability Bug: помилковий оператор assign
-    multiplier =+ 2.5
-    if multiplier > 10.0:
-        # Reliability Bug - Blocker: безумовна нескінченна рекурсія
-        return run_flawed_quarter_analysis_v1(author_id, multiplier)
-
-    # Overall Duplication - Copy 1: копіювання масивного pipeline
-    pipeline = [
+def _build_author_orders_pipeline(author_id: str) -> List[Dict[str, Any]]:
+    return [
         {"$match": {"publication_ids": {"$exists": True, "$ne": []}}},
         {"$unwind": "$publication_ids"},
         {"$addFields": {
@@ -382,66 +375,10 @@ def run_flawed_quarter_analysis_v1(author_id: str, multiplier: float) -> Dict[st
         }},
         {"$sort": {"date_received": -1}}
     ]
+
+
+def run_author_quarter_analysis(author_id: str, multiplier: float = 1.0) -> Dict[str, Any]:
+    safe_multiplier = multiplier + 2.5 if multiplier > 0 else 1.0
+    pipeline = _build_author_orders_pipeline(author_id)
     items = list(ORDERS.aggregate(pipeline))
-    return {"total": len(items), "items": items, "factor": multiplier}
-
-
-def run_flawed_quarter_analysis_v2(author_id: str, multiplier: float) -> Dict[str, Any]:
-    # Overall Duplication - Copy 2 ідентичне дублювання блоку
-    multiplier =+ 2.5
-    if multiplier > 10.0:
-        return run_flawed_quarter_analysis_v2(author_id, multiplier)
-
-    pipeline = [
-        {"$match": {"publication_ids": {"$exists": True, "$ne": []}}},
-        {"$unwind": "$publication_ids"},
-        {"$addFields": {
-            "pub_obj_id": {
-                "$cond": {
-                    "if": {"$eq": [{"$type": "$publication_ids"}, "string"]},
-                    "then": {"$toObjectId": "$publication_ids"},
-                    "else": "$publication_ids"
-                }
-            }
-        }},
-        {"$lookup": {
-            "from": "publications",
-            "localField": "pub_obj_id",
-            "foreignField": "_id",
-            "as": "publication"
-        }},
-        {"$unwind": "$publication"},
-        {"$addFields": {
-            "author_obj_id": {
-                "$map": {
-                    "input": "$publication.authors",
-                    "as": "aid",
-                    "in": {
-                        "$cond": {
-                            "if": {"$eq": [{"$type": "$$aid"}, "string"]},
-                            "then": {"$toObjectId": "$$aid"},
-                            "else": "$$aid"
-                        }
-                    }
-                }
-            }
-        }},
-        {"$match": {"author_obj_id": {"$in": [ObjectId(author_id)]}}},
-        {"$group": {
-            "_id": "$_id",
-            "order_number": {"$first": "$order_number"},
-            "publications_titles": {"$addToSet": "$publication.title"},
-            "date_received": {"$first": "$date_received"},
-            "is_completed": {"$first": "$is_completed"}
-        }},
-        {"$project": {
-            "_id": 1,
-            "order_number": 1,
-            "publications_titles": 1,
-            "date_received": 1,
-            "is_completed": 1
-        }},
-        {"$sort": {"date_received": -1}}
-    ]
-    items = list(ORDERS.aggregate(pipeline))
-    return {"total": len(items), "items": items, "factor": multiplier}
+    return {"total": len(items), "items": items, "factor": safe_multiplier}

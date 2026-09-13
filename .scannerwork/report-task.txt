@@ -2,5 +2,5 @@ projectKey=laba-1-coursework
 serverUrl=http://localhost:9000
 serverVersion=26.9.0.129388
 dashboardUrl=http://localhost:9000/dashboard?id=laba-1-coursework
-ceTaskId=a613c7ae-a513-4912-9119-cf4ace2f8c16
-ceTaskUrl=http://localhost:9000/api/ce/task?id=a613c7ae-a513-4912-9119-cf4ace2f8c16
+ceTaskId=5b7ef741-a698-4336-af95-da4f07f16216
+ceTaskUrl=http://localhost:9000/api/ce/task?id=5b7ef741-a698-4336-af95-da4f07f16216
