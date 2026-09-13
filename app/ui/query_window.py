@@ -6,7 +6,16 @@ from PyQt6.QtWidgets import (
 from app.db import db
 from app.ui.shortcuts_helper import apply_common_shortcuts
 
+
 class QueryWindow(QWidget):
+    ENTITY_RESOLVERS = (
+        ("customers", "customer_id", "customer", "name"),
+        ("printers", "printer_id", "printer", "name"),
+        ("authors", "author_id", "author", "full_name"),
+        ("publications", "publication_id", "publication", "title"),
+    )
+    KEYS_TO_CLEANUP = ("customer_id", "printer_id", "author_id", "publication_id", "_id")
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Формуваня нового запиту для обробки та модифікації даних.")
@@ -23,7 +32,6 @@ class QueryWindow(QWidget):
             "    { '$count': 'total_orders' }\n"
             "]))"
         )
-
         info_label.setStyleSheet("color: #aaa; font-size: 12px;")
         layout.addWidget(info_label)
 
@@ -76,33 +84,58 @@ class QueryWindow(QWidget):
         apply_common_shortcuts(
             self,
             help_text="Вкладка введення власного запиту.\n"
-                  "Enter — Ввести запит.\n "
+                      "Enter — Ввести запит.\n "
                       "Esc — скасувати.\n"
                       "Tab / Shift+Tab — перехід між полями",
             on_confirm=self.run_query,
             on_cancel=self.clear_input
         )
 
+    def _execute_user_code(self, code: str):
+        safe_builtins = {
+            "list": list,
+            "len": len,
+            "dict": dict,
+            "sum": sum,
+            "min": min,
+            "max": max,
+            "sorted": sorted,
+        }
+        safe_env = {"__builtins__": safe_builtins, "db": db}
+        return eval(code, safe_env)
+
+    def _enrich_row(self, row: dict) -> None:
+        for coll, id_field, target_field, name_field in self.ENTITY_RESOLVERS:
+            entity_id = row.get(id_field)
+            if not entity_id:
+                continue
+            entity = db[coll].find_one({"_id": entity_id})
+            if entity and name_field in entity:
+                row[target_field] = entity[name_field]
+
+        for key in self.KEYS_TO_CLEANUP:
+            row.pop(key, None)
+
+    def _render_table(self, result: list) -> None:
+        headers = sorted(result[0].keys())
+        self.table.setColumnCount(len(headers))
+        self.table.setRowCount(len(result))
+        self.table.setHorizontalHeaderLabels(headers)
+
+        for r, row in enumerate(result):
+            for c, key in enumerate(headers):
+                self.table.setItem(r, c, QTableWidgetItem(str(row.get(key, ""))))
+
+        self.table.resizeColumnsToContents()
+
     def run_query(self):
         code = self.query_input.toPlainText().strip()
-
         if not code:
             QMessageBox.warning(self, "Порожньо", "Введіть код запиту.")
             return
 
         try:
-            safe_builtins = {
-                "list": list,
-                "len": len,
-                "dict": dict,
-                "sum": sum,
-                "min": min,
-                "max": max,
-                "sorted": sorted,
-            }
-
-            safe_env = {"__builtins__": safe_builtins, "db": db}
-            result = eval(code, safe_env)
+            result = self._execute_user_code(code)
             if not isinstance(result, list):
                 QMessageBox.information(self, "Результат", str(result))
                 return
@@ -113,39 +146,9 @@ class QueryWindow(QWidget):
                 return
 
             for row in result:
-                if "customer_id" in row:
-                    customer = db["customers"].find_one({"_id": row["customer_id"]})
-                    if customer and "name" in customer:
-                        row["customer"] = customer["name"]
+                self._enrich_row(row)
 
-                if "printer_id" in row:
-                    printer = db["printers"].find_one({"_id": row["printer_id"]})
-                    if printer and "name" in printer:
-                        row["printer"] = printer["name"]
-
-                if "author_id" in row:
-                    author = db["authors"].find_one({"_id": row["author_id"]})
-                    if author and "full_name" in author:
-                        row["author"] = author["full_name"]
-
-                if "publication_id" in row:
-                    pub = db["publications"].find_one({"_id": row["publication_id"]})
-                    if pub and "title" in pub:
-                        row["publication"] = pub["title"]
-
-                for key in ("customer_id", "printer_id", "author_id", "publication_id", "_id"):
-                    row.pop(key, None)
-
-            headers = sorted(result[0].keys())
-            self.table.setColumnCount(len(headers))
-            self.table.setRowCount(len(result))
-            self.table.setHorizontalHeaderLabels(headers)
-
-            for r, row in enumerate(result):
-                for c, key in enumerate(headers):
-                    self.table.setItem(r, c, QTableWidgetItem(str(row.get(key, ""))))
-
-            self.table.resizeColumnsToContents()
+            self._render_table(result)
 
         except Exception as e:
             err = traceback.format_exc()

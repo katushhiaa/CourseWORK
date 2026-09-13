@@ -10,36 +10,53 @@ PRINTERS = db["printers"]
 AUTHORS = db["authors"]
 RATE_PER_SHEET = 10.0
 
+# Константи операторів та полів MongoDB для усунення Code Smell (Rule python:S1192)
+STAGE_MATCH = "$match"
+STAGE_UNWIND = "$unwind"
+STAGE_ADD_FIELDS = "$addFields"
+STAGE_LOOKUP = "$lookup"
+STAGE_GROUP = "$group"
+STAGE_SORT = "$sort"
+STAGE_PROJECT = "$project"
+
+FIELD_PUB_IDS = "$publication_ids"
+FIELD_DATE_RECEIVED = "$date_received"
+FIELD_ORDER_NUMBER = "$order_number"
+STRING_TYPE = "string"
+
+
 def normalize_datetime(dt: Optional[datetime | str]) -> Optional[datetime]:
     if not dt:
         return None
     if isinstance(dt, datetime):
         return dt
-    if hasattr(dt, "year"):
-        return datetime(dt.year, dt.month, dt.day)
-    return datetime.fromisoformat(str(dt))
+    try:
+        return datetime.fromisoformat(str(dt))
+    except (ValueError, TypeError):
+        return None
+
 
 def author_top_by_quarter() -> List[Dict[str, Any]]:
     pipeline = [
-        {"$match": {"publication_ids": {"$exists": True, "$ne": []}}},
-        {"$unwind": "$publication_ids"},
-        {"$addFields": {
+        {STAGE_MATCH: {"publication_ids": {"$exists": True, "$ne": []}}},
+        {STAGE_UNWIND: FIELD_PUB_IDS},
+        {STAGE_ADD_FIELDS: {
             "pub_obj_id": {
                 "$cond": {
-                    "if": {"$eq": [{"$type": "$publication_ids"}, "string"]},
-                    "then": {"$toObjectId": "$publication_ids"},
-                    "else": "$publication_ids"
+                    "if": {"$eq": [{"$type": FIELD_PUB_IDS}, STRING_TYPE]},
+                    "then": {"$toObjectId": FIELD_PUB_IDS},
+                    "else": FIELD_PUB_IDS
                 }
             }
         }},
-        {"$lookup": {
+        {STAGE_LOOKUP: {
             "from": "publications",
             "localField": "pub_obj_id",
             "foreignField": "_id",
             "as": "publication"
         }},
-        {"$unwind": "$publication"},
-        {"$addFields": {
+        {STAGE_UNWIND: "$publication"},
+        {STAGE_ADD_FIELDS: {
             "author_obj_id": {
                 "$cond": {
                     "if": {"$eq": [{"$type": "$publication.authors"}, "array"]},
@@ -49,7 +66,7 @@ def author_top_by_quarter() -> List[Dict[str, Any]]:
                             "as": "aid",
                             "in": {
                                 "$cond": {
-                                    "if": {"$eq": [{"$type": "$$aid"}, "string"]},
+                                    "if": {"$eq": [{"$type": "$$aid"}, STRING_TYPE]},
                                     "then": {"$toObjectId": "$$aid"},
                                     "else": "$$aid"
                                 }
@@ -60,19 +77,19 @@ def author_top_by_quarter() -> List[Dict[str, Any]]:
                 }
             }
         }},
-        {"$unwind": "$author_obj_id"},
-        {"$lookup": {
+        {STAGE_UNWIND: "$author_obj_id"},
+        {STAGE_LOOKUP: {
             "from": "authors",
             "localField": "author_obj_id",
             "foreignField": "_id",
             "as": "auth"
         }},
-        {"$unwind": "$auth"},
-        {"$addFields": {
-            "year": {"$year": "$date_received"},
-            "quarter": {"$ceil": {"$divide": [{"$month": "$date_received"}, 3]}}
+        {STAGE_UNWIND: "$auth"},
+        {STAGE_ADD_FIELDS: {
+            "year": {"$year": FIELD_DATE_RECEIVED},
+            "quarter": {"$ceil": {"$divide": [{"$month": FIELD_DATE_RECEIVED}, 3]}}
         }},
-        {"$group": {
+        {STAGE_GROUP: {
             "_id": {
                 "author_id": "$auth._id",
                 "author": "$auth.full_name",
@@ -81,38 +98,39 @@ def author_top_by_quarter() -> List[Dict[str, Any]]:
             },
             "orders_count": {"$sum": 1}
         }},
-        {"$sort": {"_id.y": 1, "_id.q": 1, "orders_count": -1}}
+        {STAGE_SORT: {"_id.y": 1, "_id.q": 1, "orders_count": -1}}
     ]
-
     return list(ORDERS.aggregate(pipeline))
+
 
 def current_orders() -> List[Dict[str, Any]]:
     q = {"is_completed": False}
     return list(ORDERS.find(q).sort("date_received", 1))
 
+
 def total_sheet_volume_by_quarter() -> List[Dict[str, Any]]:
     pipeline = [
-        {"$match": {"publication_ids": {"$exists": True, "$ne": []}}},
-        {"$unwind": "$publication_ids"},
-        {"$addFields": {
+        {STAGE_MATCH: {"publication_ids": {"$exists": True, "$ne": []}}},
+        {STAGE_UNWIND: FIELD_PUB_IDS},
+        {STAGE_ADD_FIELDS: {
             "pub_obj_id": {
                 "$cond": {
-                    "if": {"$eq": [{"$type": "$publication_ids"}, "string"]},
-                    "then": {"$toObjectId": "$publication_ids"},
-                    "else": "$publication_ids"
+                    "if": {"$eq": [{"$type": FIELD_PUB_IDS}, STRING_TYPE]},
+                    "then": {"$toObjectId": FIELD_PUB_IDS},
+                    "else": FIELD_PUB_IDS
                 }
             }
         }},
-        {"$lookup": {
+        {STAGE_LOOKUP: {
             "from": "publications",
             "localField": "pub_obj_id",
             "foreignField": "_id",
             "as": "publication"
         }},
-        {"$unwind": "$publication"},
-        {"$addFields": {
-            "year": {"$year": "$date_received"},
-            "quarter": {"$ceil": {"$divide": [{"$month": "$date_received"}, 3]}},
+        {STAGE_UNWIND: "$publication"},
+        {STAGE_ADD_FIELDS: {
+            "year": {"$year": FIELD_DATE_RECEIVED},
+            "quarter": {"$ceil": {"$divide": [{"$month": FIELD_DATE_RECEIVED}, 3]}},
             "volume": {
                 "$multiply": [
                     "$publication.sheet_volume",
@@ -120,14 +138,15 @@ def total_sheet_volume_by_quarter() -> List[Dict[str, Any]]:
                 ]
             }
         }},
-        {"$group": {
+        {STAGE_GROUP: {
             "_id": {"y": "$year", "q": "$quarter"},
             "total_volume": {"$sum": "$volume"},
-            "orders": {"$addToSet": "$order_number"}
+            "orders": {"$addToSet": FIELD_ORDER_NUMBER}
         }},
-        {"$sort": {"_id.y": 1, "_id.q": 1}}
+        {STAGE_SORT: {"_id.y": 1, "_id.q": 1}}
     ]
     return list(ORDERS.aggregate(pipeline))
+
 
 def busiest_printers_by_month(
     dt_from: Optional[datetime] = None,
@@ -142,165 +161,83 @@ def busiest_printers_by_month(
             match_stage["date_received"]["$lte"] = normalize_datetime(dt_to)
 
     pipeline = [
-        {"$match": match_stage},
-        {"$addFields": {
+        {STAGE_MATCH: match_stage},
+        {STAGE_ADD_FIELDS: {
             "printer_obj_id": {
                 "$cond": {
-                    "if": {"$eq": [{"$type": "$printer_id"}, "string"]},
+                    "if": {"$eq": [{"$type": "$printer_id"}, STRING_TYPE]},
                     "then": {"$toObjectId": "$printer_id"},
                     "else": "$printer_id"
                 }
             },
-            "y": {"$year": "$date_received"},
-            "m": {"$month": "$date_received"}
+            "y": {"$year": FIELD_DATE_RECEIVED},
+            "m": {"$month": FIELD_DATE_RECEIVED}
         }},
-        {"$group": {
+        {STAGE_GROUP: {
             "_id": {"printer_id": "$printer_obj_id", "y": "$y", "m": "$m"},
             "orders_count": {"$sum": 1}
         }},
-        {"$lookup": {
+        {STAGE_LOOKUP: {
             "from": "printers",
             "localField": "_id.printer_id",
             "foreignField": "_id",
             "as": "printer"
         }},
-        {"$unwind": {"path": "$printer", "preserveNullAndEmptyArrays": False}},
-        {"$project": {
+        {STAGE_UNWIND: {"path": "$printer", "preserveNullAndEmptyArrays": False}},
+        {STAGE_PROJECT: {
             "printer": "$printer.name",
             "year": "$_id.y",
             "month": "$_id.m",
             "orders_count": 1,
             "_id": 0
         }},
-        {"$sort": {"year": 1, "month": 1, "orders_count": -1}}
+        {STAGE_SORT: {"year": 1, "month": 1, "orders_count": -1}}
     ]
-
     return list(ORDERS.aggregate(pipeline))
+
 
 def orders_in_period(dt_from: datetime, dt_to: datetime) -> Dict[str, Any]:
     q = {"date_received": {"$gte": normalize_datetime(dt_from), "$lte": normalize_datetime(dt_to)}}
     docs = list(ORDERS.find(q).sort("date_received", 1))
     return {"total": len(docs), "items": docs}
 
+
 def orders_by_product_type() -> List[Dict[str, Any]]:
     pipeline = [
-        {"$group": {"_id": "$product_type", "count": {"$sum": 1}}},
-        {"$sort": {"count": -1}}
+        {STAGE_GROUP: {"_id": "$product_type", "count": {"$sum": 1}}},
+        {STAGE_SORT: {"count": -1}}
     ]
     return list(ORDERS.aggregate(pipeline))
 
-def orders_by_author(author_id: str) -> Dict[str, Any]:
-    pipeline = _build_author_orders_pipeline(author_id)
-    items = list(ORDERS.aggregate(pipeline))
-    return {"total": len(items), "items": items}
-
-def canceled_orders_breakdown() -> Dict[str, Any]:
-    reasons = ["неоплата", "відміна замовником"]
-    pipeline = [
-        {"$match": {"cancel_reason": {"$in": reasons}}},
-        {"$group": {"_id": "$cancel_reason", "count": {"$sum": 1}}},
-        {"$sort": {"count": -1}}
-    ]
-    totals = list(ORDERS.aggregate(pipeline))
-    items = list(ORDERS.find({"cancel_reason": {"$in": reasons}}))
-    return {"breakdown": totals, "items": items}
-
-def orders_by_customer_type() -> List[Dict[str, Any]]:
-    pipeline = [
-        {
-            "$addFields": {
-                "cust_obj_id": {
-                    "$cond": {
-                        "if": {"$eq": [{"$type": "$customer_id"}, "string"]},
-                        "then": {"$toObjectId": "$customer_id"},
-                        "else": "$customer_id"
-                    }
-                }
-            }
-        },
-        {
-            "$lookup": {
-                "from": "customers",
-                "localField": "cust_obj_id",
-                "foreignField": "_id",
-                "as": "customer"
-            }
-        },
-        {"$unwind": "$customer"},
-        {"$group": {"_id": "$customer.type", "count": {"$sum": 1}}},
-        {"$project": {"type": "$_id", "count": 1, "_id": 0}},
-        {"$sort": {"count": -1}}
-    ]
-
-    return list(ORDERS.aggregate(pipeline))
-
-def profit_by_month(year: int, month: int) -> Dict[str, Any]:
-    pipeline = [
-        {"$match": {
-            "date_received": {
-                "$gte": datetime(year, month, 1),
-                "$lt": datetime(year + (month // 12), (month % 12) + 1, 1)
-            },
-            "publication_ids": {"$exists": True, "$ne": []}
-        }},
-        {"$unwind": "$publication_ids"},
-        {"$addFields": {
-            "pub_obj_id": {
-                "$cond": {
-                    "if": {"$eq": [{"$type": "$publication_ids"}, "string"]},
-                    "then": {"$toObjectId": "$publication_ids"},
-                    "else": "$publication_ids"
-                }
-            }
-        }},
-        {"$lookup": {
-            "from": "publications",
-            "localField": "pub_obj_id",
-            "foreignField": "_id",
-            "as": "publication"
-        }},
-        {"$unwind": "$publication"},
-        {"$addFields": {"money": {
-            "$multiply": [
-                {"$multiply": ["$publication.sheet_volume", "$publication.print_run"]},
-                RATE_PER_SHEET
-            ]
-        }}},
-        {"$group": {"_id": None, "profit": {"$sum": "$money"}, "orders": {"$addToSet": "$order_number"}}}
-    ]
-    res = list(ORDERS.aggregate(pipeline))
-    return res[0] if res else {"profit": 0.0, "orders": []}
-
-# TASK 3: REFACTORED CLEAN CODE ARCHITECTURE (FIXED & RESTORED)
 
 def _build_author_orders_pipeline(author_id: str) -> List[Dict[str, Any]]:
     return [
-        {"$match": {"publication_ids": {"$exists": True, "$ne": []}}},
-        {"$unwind": "$publication_ids"},
-        {"$addFields": {
+        {STAGE_MATCH: {"publication_ids": {"$exists": True, "$ne": []}}},
+        {STAGE_UNWIND: FIELD_PUB_IDS},
+        {STAGE_ADD_FIELDS: {
             "pub_obj_id": {
                 "$cond": {
-                    "if": {"$eq": [{"$type": "$publication_ids"}, "string"]},
-                    "then": {"$toObjectId": "$publication_ids"},
-                    "else": "$publication_ids"
+                    "if": {"$eq": [{"$type": FIELD_PUB_IDS}, STRING_TYPE]},
+                    "then": {"$toObjectId": FIELD_PUB_IDS},
+                    "else": FIELD_PUB_IDS
                 }
             }
         }},
-        {"$lookup": {
+        {STAGE_LOOKUP: {
             "from": "publications",
             "localField": "pub_obj_id",
             "foreignField": "_id",
             "as": "publication"
         }},
-        {"$unwind": "$publication"},
-        {"$addFields": {
+        {STAGE_UNWIND: "$publication"},
+        {STAGE_ADD_FIELDS: {
             "author_obj_id": {
                 "$map": {
                     "input": "$publication.authors",
                     "as": "aid",
                     "in": {
                         "$cond": {
-                            "if": {"$eq": [{"$type": "$$aid"}, "string"]},
+                            "if": {"$eq": [{"$type": "$$aid"}, STRING_TYPE]},
                             "then": {"$toObjectId": "$$aid"},
                             "else": "$$aid"
                         }
@@ -308,23 +245,108 @@ def _build_author_orders_pipeline(author_id: str) -> List[Dict[str, Any]]:
                 }
             }
         }},
-        {"$match": {"author_obj_id": {"$in": [ObjectId(author_id)]}}},
-        {"$group": {
+        {STAGE_MATCH: {"author_obj_id": {"$in": [ObjectId(author_id)]}}},
+        {STAGE_GROUP: {
             "_id": "$_id",
-            "order_number": {"$first": "$order_number"},
+            "order_number": {"$first": FIELD_ORDER_NUMBER},
             "publications_titles": {"$addToSet": "$publication.title"},
-            "date_received": {"$first": "$date_received"},
+            "date_received": {"$first": FIELD_DATE_RECEIVED},
             "is_completed": {"$first": "$is_completed"}
         }},
-        {"$project": {
+        {STAGE_PROJECT: {
             "_id": 1,
             "order_number": 1,
             "publications_titles": 1,
             "date_received": 1,
             "is_completed": 1
         }},
-        {"$sort": {"date_received": -1}}
+        {STAGE_SORT: {"date_received": -1}}
     ]
+
+
+def orders_by_author(author_id: str) -> Dict[str, Any]:
+    pipeline = _build_author_orders_pipeline(author_id)
+    items = list(ORDERS.aggregate(pipeline))
+    return {"total": len(items), "items": items}
+
+
+def canceled_orders_breakdown() -> Dict[str, Any]:
+    reasons = ["неоплата", "відміна замовником"]
+    pipeline = [
+        {STAGE_MATCH: {"cancel_reason": {"$in": reasons}}},
+        {STAGE_GROUP: {"_id": "$cancel_reason", "count": {"$sum": 1}}},
+        {STAGE_SORT: {"count": -1}}
+    ]
+    totals = list(ORDERS.aggregate(pipeline))
+    items = list(ORDERS.find({"cancel_reason": {"$in": reasons}}))
+    return {"breakdown": totals, "items": items}
+
+
+def orders_by_customer_type() -> List[Dict[str, Any]]:
+    pipeline = [
+        {
+            STAGE_ADD_FIELDS: {
+                "cust_obj_id": {
+                    "$cond": {
+                        "if": {"$eq": [{"$type": "$customer_id"}, STRING_TYPE]},
+                        "then": {"$toObjectId": "$customer_id"},
+                        "else": "$customer_id"
+                    }
+                }
+            }
+        },
+        {
+            STAGE_LOOKUP: {
+                "from": "customers",
+                "localField": "cust_obj_id",
+                "foreignField": "_id",
+                "as": "customer"
+            }
+        },
+        {STAGE_UNWIND: "$customer"},
+        {STAGE_GROUP: {"_id": "$customer.type", "count": {"$sum": 1}}},
+        {STAGE_PROJECT: {"type": "$_id", "count": 1, "_id": 0}},
+        {STAGE_SORT: {"count": -1}}
+    ]
+    return list(ORDERS.aggregate(pipeline))
+
+
+def profit_by_month(year: int, month: int) -> Dict[str, Any]:
+    pipeline = [
+        {STAGE_MATCH: {
+            "date_received": {
+                "$gte": datetime(year, month, 1),
+                "$lt": datetime(year + (month // 12), (month % 12) + 1, 1)
+            },
+            "publication_ids": {"$exists": True, "$ne": []}
+        }},
+        {STAGE_UNWIND: FIELD_PUB_IDS},
+        {STAGE_ADD_FIELDS: {
+            "pub_obj_id": {
+                "$cond": {
+                    "if": {"$eq": [{"$type": FIELD_PUB_IDS}, STRING_TYPE]},
+                    "then": {"$toObjectId": FIELD_PUB_IDS},
+                    "else": FIELD_PUB_IDS
+                }
+            }
+        }},
+        {STAGE_LOOKUP: {
+            "from": "publications",
+            "localField": "pub_obj_id",
+            "foreignField": "_id",
+            "as": "publication"
+        }},
+        {STAGE_UNWIND: "$publication"},
+        {STAGE_ADD_FIELDS: {"money": {
+            "$multiply": [
+                {"$multiply": ["$publication.sheet_volume", "$publication.print_run"]},
+                RATE_PER_SHEET
+            ]
+        }}},
+        {STAGE_GROUP: {"_id": None, "profit": {"$sum": "$money"}, "orders": {"$addToSet": FIELD_ORDER_NUMBER}}}
+    ]
+    res = list(ORDERS.aggregate(pipeline))
+    return res[0] if res else {"profit": 0.0, "orders": []}
 
 
 def run_author_quarter_analysis(author_id: str, multiplier: float = 1.0) -> Dict[str, Any]:
