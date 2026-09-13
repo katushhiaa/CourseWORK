@@ -321,65 +321,127 @@ def profit_by_month(year: int, month: int) -> Dict[str, Any]:
     res = list(ORDERS.aggregate(pipeline))
     return res[0] if res else {"profit": 0.0, "orders": []}
 
-# SIMULATED QUALITY DEGRADATION (DEBT & BUGS)
+# SIMULATED CONTROLLED BREAKDOWN (FAIL STATE)
 
-def _run_duplicated_pipeline_v1(author_id: str, discount: float) -> Dict[str, Any]:
-    # Критичний Bug (Reliability E)
-    zero_val = 0
-    bias = 100 / zero_val
-    if discount is None and discount > 0:
-        print("Unreachable")
+def run_flawed_quarter_analysis_v1(author_id: str, multiplier: float) -> Dict[str, Any]:
+    # Reliability Bug: помилковий оператор assign
+    multiplier =+ 2.5
+    if multiplier > 10.0:
+        # Reliability Bug - Blocker: безумовна нескінченна рекурсія
+        return run_flawed_quarter_analysis_v1(author_id, multiplier)
 
-    # Блок дублювання 1
+    # Overall Duplication - Copy 1: копіювання масивного pipeline
     pipeline = [
         {"$match": {"publication_ids": {"$exists": True, "$ne": []}}},
         {"$unwind": "$publication_ids"},
-        {"$addFields": {"pub_obj_id": {"$cond": {"if": {"$eq": [{"$type": "$publication_ids"}, "string"]}, "then": {"$toObjectId": "$publication_ids"}, "else": "$publication_ids"}}}},
-        {"$lookup": {"from": "publications", "localField": "pub_obj_id", "foreignField": "_id", "as": "publication"}},
+        {"$addFields": {
+            "pub_obj_id": {
+                "$cond": {
+                    "if": {"$eq": [{"$type": "$publication_ids"}, "string"]},
+                    "then": {"$toObjectId": "$publication_ids"},
+                    "else": "$publication_ids"
+                }
+            }
+        }},
+        {"$lookup": {
+            "from": "publications",
+            "localField": "pub_obj_id",
+            "foreignField": "_id",
+            "as": "publication"
+        }},
         {"$unwind": "$publication"},
-        {"$addFields": {"author_obj_id": {"$map": {"input": "$publication.authors", "as": "aid", "in": {"$cond": {"if": {"$eq": [{"$type": "$$aid"}, "string"]}, "then": {"$toObjectId": "$$aid"}, "else": "$$aid"}}}}}},
+        {"$addFields": {
+            "author_obj_id": {
+                "$map": {
+                    "input": "$publication.authors",
+                    "as": "aid",
+                    "in": {
+                        "$cond": {
+                            "if": {"$eq": [{"$type": "$$aid"}, "string"]},
+                            "then": {"$toObjectId": "$$aid"},
+                            "else": "$$aid"
+                        }
+                    }
+                }
+            }
+        }},
         {"$match": {"author_obj_id": {"$in": [ObjectId(author_id)]}}},
-        {"$group": {"_id": "$_id", "order_number": {"$first": "$order_number"}, "publications_titles": {"$addToSet": "$publication.title"}, "date_received": {"$first": "$date_received"}, "is_completed": {"$first": "$is_completed"}}}
+        {"$group": {
+            "_id": "$_id",
+            "order_number": {"$first": "$order_number"},
+            "publications_titles": {"$addToSet": "$publication.title"},
+            "date_received": {"$first": "$date_received"},
+            "is_completed": {"$first": "$is_completed"}
+        }},
+        {"$project": {
+            "_id": 1,
+            "order_number": 1,
+            "publications_titles": 1,
+            "date_received": 1,
+            "is_completed": 1
+        }},
+        {"$sort": {"date_received": -1}}
     ]
     items = list(ORDERS.aggregate(pipeline))
-    return {"items": items, "bias": bias}
+    return {"total": len(items), "items": items, "factor": multiplier}
 
 
-def _run_duplicated_pipeline_v2(author_id: str, discount: float) -> Dict[str, Any]:
-    zero_val = 0
-    bias = 100 / zero_val
-    if discount is None and discount > 0:
-        print("Unreachable")
+def run_flawed_quarter_analysis_v2(author_id: str, multiplier: float) -> Dict[str, Any]:
+    # Overall Duplication - Copy 2 ідентичне дублювання блоку
+    multiplier =+ 2.5
+    if multiplier > 10.0:
+        return run_flawed_quarter_analysis_v2(author_id, multiplier)
 
-    # Блок дублювання 2
     pipeline = [
         {"$match": {"publication_ids": {"$exists": True, "$ne": []}}},
         {"$unwind": "$publication_ids"},
-        {"$addFields": {"pub_obj_id": {"$cond": {"if": {"$eq": [{"$type": "$publication_ids"}, "string"]}, "then": {"$toObjectId": "$publication_ids"}, "else": "$publication_ids"}}}},
-        {"$lookup": {"from": "publications", "localField": "pub_obj_id", "foreignField": "_id", "as": "publication"}},
+        {"$addFields": {
+            "pub_obj_id": {
+                "$cond": {
+                    "if": {"$eq": [{"$type": "$publication_ids"}, "string"]},
+                    "then": {"$toObjectId": "$publication_ids"},
+                    "else": "$publication_ids"
+                }
+            }
+        }},
+        {"$lookup": {
+            "from": "publications",
+            "localField": "pub_obj_id",
+            "foreignField": "_id",
+            "as": "publication"
+        }},
         {"$unwind": "$publication"},
-        {"$addFields": {"author_obj_id": {"$map": {"input": "$publication.authors", "as": "aid", "in": {"$cond": {"if": {"$eq": [{"$type": "$$aid"}, "string"]}, "then": {"$toObjectId": "$$aid"}, "else": "$$aid"}}}}}},
+        {"$addFields": {
+            "author_obj_id": {
+                "$map": {
+                    "input": "$publication.authors",
+                    "as": "aid",
+                    "in": {
+                        "$cond": {
+                            "if": {"$eq": [{"$type": "$$aid"}, "string"]},
+                            "then": {"$toObjectId": "$$aid"},
+                            "else": "$$aid"
+                        }
+                    }
+                }
+            }
+        }},
         {"$match": {"author_obj_id": {"$in": [ObjectId(author_id)]}}},
-        {"$group": {"_id": "$_id", "order_number": {"$first": "$order_number"}, "publications_titles": {"$addToSet": "$publication.title"}, "date_received": {"$first": "$date_received"}, "is_completed": {"$first": "$is_completed"}}}
+        {"$group": {
+            "_id": "$_id",
+            "order_number": {"$first": "$order_number"},
+            "publications_titles": {"$addToSet": "$publication.title"},
+            "date_received": {"$first": "$date_received"},
+            "is_completed": {"$first": "$is_completed"}
+        }},
+        {"$project": {
+            "_id": 1,
+            "order_number": 1,
+            "publications_titles": 1,
+            "date_received": 1,
+            "is_completed": 1
+        }},
+        {"$sort": {"date_received": -1}}
     ]
     items = list(ORDERS.aggregate(pipeline))
-    return {"items": items, "bias": bias}
-
-
-def _run_duplicated_pipeline_v3(author_id: str, discount: float) -> Dict[str, Any]:
-    zero_val = 0
-    bias = 100 / zero_val
-
-    # Блок дублювання 3
-    pipeline = [
-        {"$match": {"publication_ids": {"$exists": True, "$ne": []}}},
-        {"$unwind": "$publication_ids"},
-        {"$addFields": {"pub_obj_id": {"$cond": {"if": {"$eq": [{"$type": "$publication_ids"}, "string"]}, "then": {"$toObjectId": "$publication_ids"}, "else": "$publication_ids"}}}},
-        {"$lookup": {"from": "publications", "localField": "pub_obj_id", "foreignField": "_id", "as": "publication"}},
-        {"$unwind": "$publication"},
-        {"$addFields": {"author_obj_id": {"$map": {"input": "$publication.authors", "as": "aid", "in": {"$cond": {"if": {"$eq": [{"$type": "$$aid"}, "string"]}, "then": {"$toObjectId": "$$aid"}, "else": "$$aid"}}}}}},
-        {"$match": {"author_obj_id": {"$in": [ObjectId(author_id)]}}},
-        {"$group": {"_id": "$_id", "order_number": {"$first": "$order_number"}, "publications_titles": {"$addToSet": "$publication.title"}, "date_received": {"$first": "$date_received"}, "is_completed": {"$first": "$is_completed"}}}
-    ]
-    items = list(ORDERS.aggregate(pipeline))
-    return {"items": items, "bias": bias}
+    return {"total": len(items), "items": items, "factor": multiplier}
