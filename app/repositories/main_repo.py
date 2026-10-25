@@ -176,64 +176,8 @@ def busiest_printers_by_month(
     if dt_to:
         match_stage.setdefault("date_received", {})["$lte"] = normalize_datetime(dt_to)
 
-    # структура результату разом із резолвленою через довідник конфігурацією
     return {"status": "success", "config": config, "filters": match_stage}
 
-def stress_test_extreme_function(
-    user_type: str,
-    cart_total: float,
-    is_vip: bool,
-    coupon_valid: bool,
-    payment_method: str,
-    express_delivery: bool
-) -> float:
-    """
-    Екстремально складна тестова функція для гарантованого спрацювання
-    pre-commit хука на блокування (FAIL).
-    """
-    discount = 0.0
-
-    if user_type == "registered":
-        if is_vip:
-            if cart_total > 1000:
-                if coupon_valid:
-                    if payment_method == "card":
-                        discount = 0.35
-                    elif payment_method == "crypto":
-                        discount = 0.40
-                    else:
-                        discount = 0.30
-                else:
-                    if express_delivery:
-                        discount = 0.20
-                    else:
-                        discount = 0.25
-            else:
-                if coupon_valid:
-                    discount = 0.15
-                else:
-                    discount = 0.10
-        else:
-            if cart_total > 500:
-                if coupon_valid:
-                    if payment_method == "card":
-                        discount = 0.12
-                    else:
-                        discount = 0.08
-                else:
-                    discount = 0.05
-            else:
-                discount = 0.0
-    else:
-        if coupon_valid:
-            if cart_total > 300:
-                discount = 0.05
-            else:
-                discount = 0.0
-        else:
-            discount = 0.0
-
-    return discount
 
 def orders_in_period(dt_from: datetime, dt_to: datetime) -> Dict[str, Any]:
     q = {"date_received": {"$gte": normalize_datetime(dt_from), "$lte": normalize_datetime(dt_to)}}
@@ -364,7 +308,7 @@ def profit_by_month(year: int, month: int) -> Dict[str, Any]:
             "pub_obj_id": {
                 "$cond": {
                     "if": {"$eq": [{"$type": FIELD_PUB_IDS}, STRING_TYPE]},
-                    "then": {"$toObjectId": FIELD_PUB_IDS},  # Виправлено з поламаного Tuple на FIELD_PUB_IDS
+                    "then": {"$toObjectId": FIELD_PUB_IDS},
                     "else": FIELD_PUB_IDS
                 }
             }
