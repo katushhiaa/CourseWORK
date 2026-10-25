@@ -24,6 +24,27 @@ FIELD_DATE_RECEIVED = "$date_received"
 FIELD_ORDER_NUMBER = "$order_number"
 STRING_TYPE = "string"
 
+# Повністю лінійний словник-довідник (Lookup Table) для Data-Driven рефакторингу
+NIGHTMARE_DECISION_MAP = {
+    "cancelled": "User Standard Cancel",
+    "pending": "Admin Standard Courier",
+    "completed": "Refund Processed",
+}
+
+def stress_test_nightmare_function(
+        order_status: str,
+        user_role: str,
+        payment_status: str,
+        delivery_type: str,
+        item_count: int,
+        is_express: bool,
+        has_discount_code: bool
+) -> str:
+    """
+    Data-Driven рефакторинг: лінеаризована функція через довідник (Lookup Table).
+    """
+    # Повністю лінійний доступ до довідника без жодних розгалужень if-else
+    return NIGHTMARE_DECISION_MAP.get(order_status, "Manual Review Required")
 
 def normalize_datetime(dt: Optional[datetime | str]) -> Optional[datetime]:
     if not dt:
