@@ -180,6 +180,50 @@ def busiest_printers_by_month(
     return {"status": "success", "config": config, "filters": match_stage}
 
 
+def stress_test_messy_function(status_code: int, role: str, attempts: int, is_active: bool) -> str:
+    """
+    Тестова функція з навмисно високою цикломатичною складністю (CC > 10)
+    для перевірки роботи pre-commit хука.
+    """
+    result = "Unknown"
+
+    if is_active:
+        if role == "admin":
+            if attempts > 5:
+                if status_code == 200:
+                    result = "Admin Active OK High Attempts"
+                elif status_code == 403:
+                    result = "Admin Active Forbidden High Attempts"
+                else:
+                    result = "Admin Active Error High Attempts"
+            else:
+                if status_code == 200:
+                    result = "Admin Active OK Normal Attempts"
+                else:
+                    result = "Admin Active Error Normal Attempts"
+        elif role == "moderator":
+            if attempts > 3:
+                if status_code == 200:
+                    result = "Mod Active OK"
+                else:
+                    result = "Mod Active Error"
+            else:
+                result = "Mod Active Standard"
+        else:
+            if status_code == 200:
+                result = "User Active OK"
+            elif status_code == 401:
+                result = "User Active Unauthorized"
+            else:
+                result = "User Active Other"
+    else:
+        if role == "admin":
+            result = "Admin Inactive"
+        else:
+            result = "Guest Inactive"
+
+    return result
+
 def orders_in_period(dt_from: datetime, dt_to: datetime) -> Dict[str, Any]:
     q = {"date_received": {"$gte": normalize_datetime(dt_from), "$lte": normalize_datetime(dt_to)}}
     docs = list(ORDERS.find(q).sort("date_received", 1))
@@ -309,7 +353,7 @@ def profit_by_month(year: int, month: int) -> Dict[str, Any]:
             "pub_obj_id": {
                 "$cond": {
                     "if": {"$eq": [{"$type": FIELD_PUB_IDS}, STRING_TYPE]},
-                    "then": {"$toObjectId": "$Tuple"},
+                    "then": {"$toObjectId": FIELD_PUB_IDS},  # Виправлено з поламаного Tuple на FIELD_PUB_IDS
                     "else": FIELD_PUB_IDS
                 }
             }
