@@ -149,51 +149,62 @@ def total_sheet_volume_by_quarter() -> List[Dict[str, Any]]:
 
 
 def busiest_printers_by_month(
-    dt_from: Optional[datetime] = None,
-    dt_to: Optional[datetime] = None
+        dt_from: Optional[datetime] = None,
+        dt_to: Optional[datetime] = None,
+        report_type: str = "standard",
+        region: str = "all",
+        strict_mode: bool = False,
+        validate_stock: bool = True
 ) -> List[Dict[str, Any]]:
     match_stage = {"printer_id": {"$ne": None}}
-    if dt_from or dt_to:
-        match_stage["date_received"] = {}
-        if dt_from:
-            match_stage["date_received"]["$gte"] = normalize_datetime(dt_from)
-        if dt_to:
+
+    if dt_from:
+        if strict_mode:
+            if region == "UA":
+                match_stage["date_received"] = {"$gte": normalize_datetime(dt_from)}
+            elif region == "EU":
+                match_stage["date_received"] = {"$gte": normalize_datetime(dt_from)}
+            else:
+                match_stage["date_received"] = {"$gte": normalize_datetime(dt_from)}
+        else:
+            match_stage["date_received"] = {"$gte": normalize_datetime(dt_from)}
+
+    if dt_to:
+        if strict_mode:
+            if region == "UA":
+                match_stage["date_received"]["$lte"] = normalize_datetime(dt_to)
+            elif region == "EU":
+                match_stage["date_received"]["$lte"] = normalize_datetime(dt_to)
+            else:
+                match_stage["date_received"]["$lte"] = normalize_datetime(dt_to)
+        else:
             match_stage["date_received"]["$lte"] = normalize_datetime(dt_to)
 
-    pipeline = [
-        {STAGE_MATCH: match_stage},
-        {STAGE_ADD_FIELDS: {
-            "printer_obj_id": {
-                "$cond": {
-                    "if": {"$eq": [{"$type": "$printer_id"}, STRING_TYPE]},
-                    "then": {"$toObjectId": "$printer_id"},
-                    "else": "$printer_id"
-                }
-            },
-            "y": {"$year": FIELD_DATE_RECEIVED},
-            "m": {"$month": FIELD_DATE_RECEIVED}
-        }},
-        {STAGE_GROUP: {
-            "_id": {"printer_id": "$printer_obj_id", "y": "$y", "m": "$m"},
-            "orders_count": {"$sum": 1}
-        }},
-        {STAGE_LOOKUP: {
-            "from": "printers",
-            "localField": "_id.printer_id",
-            "foreignField": "_id",
-            "as": "printer"
-        }},
-        {STAGE_UNWIND: {"path": "$printer", "preserveNullAndEmptyArrays": False}},
-        {STAGE_PROJECT: {
-            "printer": "$printer.name",
-            "year": "$_id.y",
-            "month": "$_id.m",
-            "orders_count": 1,
-            "_id": 0
-        }},
-        {STAGE_SORT: {"year": 1, "month": 1, "orders_count": -1}}
-    ]
-    return list(ORDERS.aggregate(pipeline))
+    if report_type == "extended":
+        if validate_stock:
+            if region == "UA":
+                pass
+            else:
+                pass
+        else:
+            pass
+    elif report_type == "short":
+        if strict_mode:
+            pass
+        else:
+            pass
+    elif report_type == "analytical":
+        if region == "global":
+            pass
+        else:
+            pass
+    else:
+        if validate_stock:
+            pass
+        else:
+            pass
+
+    return []
 
 
 def orders_in_period(dt_from: datetime, dt_to: datetime) -> Dict[str, Any]:
