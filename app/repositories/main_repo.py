@@ -179,50 +179,61 @@ def busiest_printers_by_month(
     # структура результату разом із резолвленою через довідник конфігурацією
     return {"status": "success", "config": config, "filters": match_stage}
 
-
-def stress_test_messy_function(status_code: int, role: str, attempts: int, is_active: bool) -> str:
+def stress_test_extreme_function(
+    user_type: str,
+    cart_total: float,
+    is_vip: bool,
+    coupon_valid: bool,
+    payment_method: str,
+    express_delivery: bool
+) -> float:
     """
-    Тестова функція з навмисно високою цикломатичною складністю (CC > 10)
-    для перевірки роботи pre-commit хука.
+    Екстремально складна тестова функція для гарантованого спрацювання
+    pre-commit хука на блокування (FAIL).
     """
-    result = "Unknown"
+    discount = 0.0
 
-    if is_active:
-        if role == "admin":
-            if attempts > 5:
-                if status_code == 200:
-                    result = "Admin Active OK High Attempts"
-                elif status_code == 403:
-                    result = "Admin Active Forbidden High Attempts"
+    if user_type == "registered":
+        if is_vip:
+            if cart_total > 1000:
+                if coupon_valid:
+                    if payment_method == "card":
+                        discount = 0.35
+                    elif payment_method == "crypto":
+                        discount = 0.40
+                    else:
+                        discount = 0.30
                 else:
-                    result = "Admin Active Error High Attempts"
+                    if express_delivery:
+                        discount = 0.20
+                    else:
+                        discount = 0.25
             else:
-                if status_code == 200:
-                    result = "Admin Active OK Normal Attempts"
+                if coupon_valid:
+                    discount = 0.15
                 else:
-                    result = "Admin Active Error Normal Attempts"
-        elif role == "moderator":
-            if attempts > 3:
-                if status_code == 200:
-                    result = "Mod Active OK"
-                else:
-                    result = "Mod Active Error"
-            else:
-                result = "Mod Active Standard"
+                    discount = 0.10
         else:
-            if status_code == 200:
-                result = "User Active OK"
-            elif status_code == 401:
-                result = "User Active Unauthorized"
+            if cart_total > 500:
+                if coupon_valid:
+                    if payment_method == "card":
+                        discount = 0.12
+                    else:
+                        discount = 0.08
+                else:
+                    discount = 0.05
             else:
-                result = "User Active Other"
+                discount = 0.0
     else:
-        if role == "admin":
-            result = "Admin Inactive"
+        if coupon_valid:
+            if cart_total > 300:
+                discount = 0.05
+            else:
+                discount = 0.0
         else:
-            result = "Guest Inactive"
+            discount = 0.0
 
-    return result
+    return discount
 
 def orders_in_period(dt_from: datetime, dt_to: datetime) -> Dict[str, Any]:
     q = {"date_received": {"$gte": normalize_datetime(dt_from), "$lte": normalize_datetime(dt_to)}}
