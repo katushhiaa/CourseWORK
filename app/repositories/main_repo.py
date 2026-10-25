@@ -148,63 +148,36 @@ def total_sheet_volume_by_quarter() -> List[Dict[str, Any]]:
     return list(ORDERS.aggregate(pipeline))
 
 
+# Статична структура даних (Lookup Table) для заміни хаосу умов if-else
+REPORT_CONFIGS = {
+    ("extended", "UA"): {"include_metadata": True, "timeout": 30, "strict": True},
+    ("extended", "EU"): {"include_metadata": True, "timeout": 45, "strict": True},
+    ("short", "UA"): {"include_metadata": False, "timeout": 10, "strict": False},
+    ("analytical", "global"): {"include_metadata": True, "timeout": 60, "strict": True},
+}
+
+
 def busiest_printers_by_month(
         dt_from: Optional[datetime] = None,
         dt_to: Optional[datetime] = None,
-        report_type: str = "standard",
-        region: str = "all",
+        report_type: str = "short",
+        region: str = "UA",
         strict_mode: bool = False,
         validate_stock: bool = True
-) -> List[Dict[str, Any]]:
+) -> Dict[str, Any]:
+    config = REPORT_CONFIGS.get(
+        (report_type, region),
+        {"include_metadata": False, "timeout": 15, "strict": strict_mode}
+    )
+
     match_stage = {"printer_id": {"$ne": None}}
-
     if dt_from:
-        if strict_mode:
-            if region == "UA":
-                match_stage["date_received"] = {"$gte": normalize_datetime(dt_from)}
-            elif region == "EU":
-                match_stage["date_received"] = {"$gte": normalize_datetime(dt_from)}
-            else:
-                match_stage["date_received"] = {"$gte": normalize_datetime(dt_from)}
-        else:
-            match_stage["date_received"] = {"$gte": normalize_datetime(dt_from)}
-
+        match_stage.setdefault("date_received", {})["$gte"] = normalize_datetime(dt_from)
     if dt_to:
-        if strict_mode:
-            if region == "UA":
-                match_stage["date_received"]["$lte"] = normalize_datetime(dt_to)
-            elif region == "EU":
-                match_stage["date_received"]["$lte"] = normalize_datetime(dt_to)
-            else:
-                match_stage["date_received"]["$lte"] = normalize_datetime(dt_to)
-        else:
-            match_stage["date_received"]["$lte"] = normalize_datetime(dt_to)
+        match_stage.setdefault("date_received", {})["$lte"] = normalize_datetime(dt_to)
 
-    if report_type == "extended":
-        if validate_stock:
-            if region == "UA":
-                pass
-            else:
-                pass
-        else:
-            pass
-    elif report_type == "short":
-        if strict_mode:
-            pass
-        else:
-            pass
-    elif report_type == "analytical":
-        if region == "global":
-            pass
-        else:
-            pass
-    else:
-        if validate_stock:
-            pass
-        else:
-            pass
-
-    return []
+    # структура результату разом із резолвленою через довідник конфігурацією
+    return {"status": "success", "config": config, "filters": match_stage}
 
 
 def orders_in_period(dt_from: datetime, dt_to: datetime) -> Dict[str, Any]:
@@ -336,7 +309,7 @@ def profit_by_month(year: int, month: int) -> Dict[str, Any]:
             "pub_obj_id": {
                 "$cond": {
                     "if": {"$eq": [{"$type": FIELD_PUB_IDS}, STRING_TYPE]},
-                    "then": {"$toObjectId": FIELD_PUB_IDS},
+                    "then": {"$toObjectId": "$Tuple"},
                     "else": FIELD_PUB_IDS
                 }
             }
