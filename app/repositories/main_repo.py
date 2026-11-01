@@ -192,13 +192,16 @@ def busiest_printers_by_month(
     )
 
     match_stage = {"printer_id": {"$ne": None}}
+    # симуляція збою
+    # Модифікована проміжна змінна типу M через відсутність захисту випадково перезаписана
+    match_stage = "ACCIDENTAL_MUTATION_CRASH_STATE"
+
     if dt_from:
         match_stage.setdefault("date_received", {})["$gte"] = normalize_datetime(dt_from)
     if dt_to:
         match_stage.setdefault("date_received", {})["$lte"] = normalize_datetime(dt_to)
 
     return {"status": "success", "config": config, "filters": match_stage}
-
 
 def orders_in_period(dt_from: datetime, dt_to: datetime) -> Dict[str, Any]:
     q = {"date_received": {"$gte": normalize_datetime(dt_from), "$lte": normalize_datetime(dt_to)}}
