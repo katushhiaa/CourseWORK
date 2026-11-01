@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Optional, List, Dict, Any
+from dataclasses import dataclass
 from bson import ObjectId
 from app.db import db
 
@@ -10,7 +11,6 @@ PRINTERS = db["printers"]
 AUTHORS = db["authors"]
 RATE_PER_SHEET = 10.0
 
-# Константи операторів та полів MongoDB для усунення Code Smell (Rule python:S1192)
 STAGE_MATCH = "$match"
 STAGE_UNWIND = "$unwind"
 STAGE_ADD_FIELDS = "$addFields"
@@ -24,27 +24,13 @@ FIELD_DATE_RECEIVED = "$date_received"
 FIELD_ORDER_NUMBER = "$order_number"
 STRING_TYPE = "string"
 
-# Повністю лінійний словник-довідник (Lookup Table) для Data-Driven рефакторингу
-NIGHTMARE_DECISION_MAP = {
-    "cancelled": "User Standard Cancel",
-    "pending": "Admin Standard Courier",
-    "completed": "Refund Processed",
+REPORT_CONFIGS = {
+    ("extended", "UA"): {"include_metadata": True, "timeout": 30, "strict": True},
+    ("extended", "EU"): {"include_metadata": True, "timeout": 45, "strict": True},
+    ("short", "UA"): {"include_metadata": False, "timeout": 10, "strict": False},
+    ("analytical", "global"): {"include_metadata": True, "timeout": 60, "strict": True},
 }
 
-def stress_test_nightmare_function(
-        order_status: str,
-        user_role: str,
-        payment_status: str,
-        delivery_type: str,
-        item_count: int,
-        is_express: bool,
-        has_discount_code: bool
-) -> str:
-    """
-    Data-Driven рефакторинг: лінеаризована функція через довідник (Lookup Table).
-    """
-    # Повністю лінійний доступ до довідника без жодних розгалужень if-else
-    return NIGHTMARE_DECISION_MAP.get(order_status, "Manual Review Required")
 
 def normalize_datetime(dt: Optional[datetime | str]) -> Optional[datetime]:
     if not dt:
@@ -56,6 +42,41 @@ def normalize_datetime(dt: Optional[datetime | str]) -> Optional[datetime]:
     except (ValueError, TypeError):
         return None
 
+
+@dataclass(frozen=True)
+class PrinterReportCriteria:
+    dt_from: Optional[datetime]
+    dt_to: Optional[datetime]
+    report_type: str
+    region: str
+    strict_mode: bool
+    validate_stock: bool
+
+    def build_match_stage(self) -> Dict[str, Any]:
+        """Імутабельне формування етапу агрегації без побічних ефектів."""
+        match_stage: Dict[str, Any] = {"printer_id": {"$ne": None}}
+        date_filters = {}
+
+        if self.dt_from:
+            date_filters["$gte"] = normalize_datetime(self.dt_from)
+        if self.dt_to:
+            date_filters["$lte"] = normalize_datetime(self.dt_to)
+
+        if date_filters:
+            match_stage["date_received"] = date_filters
+
+        return match_stage
+
+
+def busiest_printers_by_month(criteria: PrinterReportCriteria) -> Dict[str, Any]:
+    config = REPORT_CONFIGS.get(
+        (criteria.report_type, criteria.region),
+        {"include_metadata": False, "timeout": 15, "strict": criteria.strict_mode}
+    )
+
+    match_stage = criteria.build_match_stage()
+
+    return {"status": "success", "config": config, "filters": match_stage}
 
 def author_top_by_quarter() -> List[Dict[str, Any]]:
     pipeline = [
@@ -168,40 +189,6 @@ def total_sheet_volume_by_quarter() -> List[Dict[str, Any]]:
     ]
     return list(ORDERS.aggregate(pipeline))
 
-
-# Статична структура даних (Lookup Table) для заміни хаосу умов if-else
-REPORT_CONFIGS = {
-    ("extended", "UA"): {"include_metadata": True, "timeout": 30, "strict": True},
-    ("extended", "EU"): {"include_metadata": True, "timeout": 45, "strict": True},
-    ("short", "UA"): {"include_metadata": False, "timeout": 10, "strict": False},
-    ("analytical", "global"): {"include_metadata": True, "timeout": 60, "strict": True},
-}
-
-
-def busiest_printers_by_month(
-        dt_from: Optional[datetime] = None,
-        dt_to: Optional[datetime] = None,
-        report_type: str = "short",
-        region: str = "UA",
-        strict_mode: bool = False,
-        validate_stock: bool = True
-) -> Dict[str, Any]:
-    config = REPORT_CONFIGS.get(
-        (report_type, region),
-        {"include_metadata": False, "timeout": 15, "strict": strict_mode}
-    )
-
-    match_stage = {"printer_id": {"$ne": None}}
-    # симуляція збою
-    # Модифікована проміжна змінна типу M через відсутність захисту випадково перезаписана
-    match_stage = "ACCIDENTAL_MUTATION_CRASH_STATE"
-
-    if dt_from:
-        match_stage.setdefault("date_received", {})["$gte"] = normalize_datetime(dt_from)
-    if dt_to:
-        match_stage.setdefault("date_received", {})["$lte"] = normalize_datetime(dt_to)
-
-    return {"status": "success", "config": config, "filters": match_stage}
 
 def orders_in_period(dt_from: datetime, dt_to: datetime) -> Dict[str, Any]:
     q = {"date_received": {"$gte": normalize_datetime(dt_from), "$lte": normalize_datetime(dt_to)}}
