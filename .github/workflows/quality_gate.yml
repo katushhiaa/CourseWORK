@@ -1,0 +1,38 @@
+name: Cloud Quality Gate & Radon Audit
+
+on:
+  push:
+    branches: [ "main", "master" ]
+
+jobs:
+  code-audit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies and Radon CLI
+        run: |
+          python -m pip install --upgrade pip
+          pip install radon
+
+      - name: Run Radon CC (Cyclomatic Complexity) scan
+        run: |
+          mkdir -p reports
+          radon cc app/ -j > reports/radon_cc_report.json
+
+      - name: Run Radon Raw (LOC) scan
+        run: |
+          radon raw app/ -j > reports/radon_raw_report.json
+
+      - name: Upload Audit Reports as Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: radon-code-metrics-reports
+          path: reports/
