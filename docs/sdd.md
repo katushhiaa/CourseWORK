@@ -71,3 +71,4 @@ flowchart LR
 | `GET` | `/api/v1/health` | Перевірка стану сервісу (Health Check) |
 | `GET` | `/api/v1/items` | Отримання списку сутностей |
 | `POST` | `/api/v1/items` | Створення нового документа в MongoDB |
+| `POST`  | `/api/v1/analytics/generate` | Генерація аналітичного звіту |
