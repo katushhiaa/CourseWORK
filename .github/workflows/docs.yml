@@ -1,0 +1,78 @@
+name: Documentation CI/CD
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install MkDocs dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install mkdocs-material mkdocs-mermaid2-plugin mkdocs-git-revision-date-localized-plugin
+
+      - name: Lint Markdown files
+        uses: DavidAnson/markdownlint-cli2-action@v17
+        with:
+          globs:
+            - "README.md"
+            - "docs/**/*.md"
+          config: |
+            {
+              "MD013": false,
+              "MD033": false,
+              "MD041": false
+            }
+
+
+      - name: Audit review_date freshness
+        run: |
+          python - <<'EOF'
+          from datetime import date
+          from pathlib import Path
+          import re
+
+          today = date.today()
+          expired = []
+          for md_file in sorted(Path("docs").rglob("*.md")):
+              text = md_file.read_text(encoding="utf-8")
+              match = re.match(r"^---\s*\n(.*?)\n---", text, re.DOTALL)
+              if not match:
+                  continue
+              d_match = re.search(r"review_date:\s*['\"]?(\d{4}-\d{2}-\d{2})['\"]?", match.group(1))
+              if d_match and date.fromisoformat(d_match.group(1)) < today:
+                  expired.append((str(md_file), d_match.group(1)))
+
+          if expired:
+              print("Прострочені документи (review_date < поточної дати):")
+              for p, d in expired:
+                  print(f"  - {p}: {d}")
+          else:
+              print("Усі документи з review_date актуальні.")
+          EOF
+
+      - name: Strict build
+        run: mkdocs build --strict
+
+      - name: Deploy to GitHub Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: mkdocs gh-deploy --force --strict
