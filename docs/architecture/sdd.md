@@ -1,3 +1,10 @@
+---
+owner: "@katushhiaa"
+status: published
+review_date: 2027-02-20
+tags: [architecture, api]
+---
+
 # System Design Document (SDD): Курсовий проєкт (Python + MongoDB)
 
 ## 1. Вступ та архітектурний огляд
@@ -26,13 +33,13 @@ flowchart LR
 ### 3.1. API Service (`app/`)
 
 - **Відповідальність:** прийом запитів, маршрутизація, обробка бізнес-правил та генерація відповідей.
-- **Ключові залежності:** підключення до БД, модулі валідації.
-- **Зв'язок з інфраструктурою:** розгортається у вигляді контейнера згідно з ISD ([docs/isd.md](https://github.com/katushhiaa/CourseWORK/blob/main/docs/isd.md)).
+- **Ключові залежності:** підключення до БД, модулі валідації (див. [ADR-0001](adr/0001-use-fastapi-or-flask-for-python.md)).
+- **Зв'язок з інфраструктурою:** розгортається у вигляді контейнера згідно з [ISD](isd.md).
 
 ### 3.2. Database Driver / ODM (`pymongo` / `motor`)
 
 - **Відповідальність:** абстракція над MongoDB, виконання запитів, керування сесіями.
-- **Ключові залежності:** MongoDB Instance.
+- **Ключові залежності:** MongoDB Instance (див. [ADR-0002](adr/0002-choose-mongodb-as-document-store.md)).
 
 ## 4. Модель даних (Схема колекцій MongoDB)
 
@@ -71,4 +78,4 @@ flowchart LR
 | `GET` | `/api/v1/health` | Перевірка стану сервісу (Health Check) |
 | `GET` | `/api/v1/items` | Отримання списку сутностей |
 | `POST` | `/api/v1/items` | Створення нового документа в MongoDB |
-| `POST`  | `/api/v1/analytics/generate` | Генерація аналітичного звіту |
+| `POST` | `/api/v1/analytics/generate` | Генерація аналітичного звіту |

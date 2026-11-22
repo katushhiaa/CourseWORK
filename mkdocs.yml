@@ -1,0 +1,52 @@
+site_name: CourseWORK — База знань (Python + MongoDB)
+repo_url: https://github.com/katushhiaa/CourseWORK
+repo_name: katushhiaa/CourseWORK
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  language: uk
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Перемкнути на світлу тему
+
+plugins:
+  - search
+  - mermaid2
+  - git-revision-date-localized:
+      enable_creation_date: false
+      type: date
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:mermaid2.fence_mermaid_custom
+  - pymdownx.tabbed:
+      alternate_style: true
+  - toc:
+      permalink: true
+
+nav:
+  - Головна (Огляд): index.md
+  - Розробникам (Developer Docs):
+      - Регламент підтримки: developer/maintenance.md
+      - Як долучитися: developer/CONTRIBUTING.md
+  - API Документація:
+      - Огляд API: api/index.md
+  - Архітектура (Architecture Docs):
+      - System Design (SDD): architecture/sdd.md
+      - Infrastructure Spec (ISD): architecture/isd.md
+      - Кущ рішень (ADR):
+          - ADR-0001 FastAPI або Flask: architecture/adr/0001-use-fastapi-or-flask-for-python.md
+          - ADR-0002 MongoDB як сховище: architecture/adr/0002-choose-mongodb-as-document-store.md
