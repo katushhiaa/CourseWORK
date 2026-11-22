@@ -1,0 +1,262 @@
+openapi: 3.0.3
+info:
+  title: CourseWORK API
+  version: 1.1.0
+  description: Контрактна специфікація сервісу CourseWORK (Python + MongoDB) за підходом API-first.
+servers:
+  - url: http://127.0.0.1:4010
+    description: Локальний мок-сервер (Prism)
+  - url: http://127.0.0.1:8000
+    description: Локальний сервер розробки
+
+paths:
+  /api/v1/health:
+    get:
+      summary: Перевірка стану сервісу
+      description: Повертає поточний стан сервісу та підключення до сховища даних MongoDB.
+      operationId: getHealth
+      responses:
+        "200":
+          description: Сервіс працює коректно
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: ok
+                database: connected
+        "500":
+          description: Внутрішня помилка сервера
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                code: INTERNAL_ERROR
+                message: Не вдалося перевірити стан сервісу
+
+  /api/v1/items:
+    get:
+      summary: Отримання списку сутностей
+      description: Повертає список записів із колекції MongoDB з опційним фільтром за статусом.
+      operationId: getItems
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Фільтр за статусом запису
+          schema:
+            type: string
+            enum: [draft, active, archived]
+            example: active
+      responses:
+        "200":
+          description: Список сутностей успішно отримано
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RecordItem"
+              example:
+                - id: "65f1a2b3c4d5e6f7a8b9c0d1"
+                  title: "Елемент №1"
+                  status: "active"
+        "400":
+          description: Некоректний параметр запиту
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                code: BAD_REQUEST
+                message: Некоректне значення параметра status
+
+    post:
+      summary: Створення нового документа в MongoDB
+      description: Створює новий запис у колекції MongoDB та повертає створений об'єкт.
+      operationId: createItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecordCreate"
+            example:
+              title: "Новий елемент"
+              status: "draft"
+      responses:
+        "200":
+          description: Документ успішно створено
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecordItem"
+              example:
+                id: "65f1a2b3c4d5e6f7a8b9c0d2"
+                title: "Новий елемент"
+                status: "draft"
+        "422":
+          description: Помилка валідації вхідних даних
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                code: VALIDATION_ERROR
+                message: Поле title є обов'язковим
+
+  /api/v1/analytics/generate:
+    post:
+      summary: Генерація аналітичного звіту
+      description: Формує аналітичний звіт за вибраним періодом та критерієм групування.
+      operationId: generateAnalytics
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalyticsRequest"
+            example:
+              period: last_30_days
+              group_by: status
+      responses:
+        "200":
+          description: Звіт успішно сформовано
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsReport"
+              example:
+                period: last_30_days
+                total_records: 25
+                breakdown:
+                  active: 18
+                  draft: 7
+        "422":
+          description: Помилка валідації запиту
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                code: VALIDATION_ERROR
+                message: Некоректний параметр period
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - database
+      example:
+        status: ok
+        database: connected
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+          example: ok
+        database:
+          type: string
+          enum: [connected, disconnected]
+          example: connected
+
+    RecordCreate:
+      type: object
+      required:
+        - title
+        - status
+      example:
+        title: "Новий елемент"
+        status: draft
+      properties:
+        title:
+          type: string
+          example: "Новий елемент"
+        status:
+          type: string
+          enum: [draft, active, archived]
+          example: draft
+
+    RecordItem:
+      type: object
+      required:
+        - id
+        - title
+        - status
+      example:
+        id: "65f1a2b3c4d5e6f7a8b9c0d1"
+        title: "Елемент №1"
+        status: active
+      properties:
+        id:
+          type: string
+          example: "65f1a2b3c4d5e6f7a8b9c0d1"
+        title:
+          type: string
+          example: "Елемент №1"
+        status:
+          type: string
+          enum: [draft, active, archived]
+          example: active
+
+    AnalyticsRequest:
+      type: object
+      required:
+        - period
+      example:
+        period: last_30_days
+        group_by: status
+      properties:
+        period:
+          type: string
+          enum: [last_7_days, last_30_days, all_time]
+          example: last_30_days
+        group_by:
+          type: string
+          enum: [status, created_at]
+          example: status
+
+    AnalyticsReport:
+      type: object
+      required:
+        - period
+        - total_records
+      example:
+        period: last_30_days
+        total_records: 25
+        breakdown:
+          active: 18
+          draft: 7
+      properties:
+        period:
+          type: string
+          example: last_30_days
+        total_records:
+          type: integer
+          example: 25
+        breakdown:
+          type: object
+          additionalProperties:
+            type: integer
+          example:
+            active: 18
+            draft: 7
+
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      example:
+        code: VALIDATION_ERROR
+        message: Помилка обробки запиту
+      properties:
+        code:
+          type: string
+          example: VALIDATION_ERROR
+        message:
+          type: string
+          example: Помилка обробки запиту
