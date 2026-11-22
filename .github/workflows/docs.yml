@@ -34,6 +34,10 @@ jobs:
         run: |
           npx -y markdownlint-cli2 "README.md" "docs/**/*.md" "#docs/api/swagger.html"
 
+      - name: Install swagger-ui-tag
+        run:
+          pip install mkdocs-material mkdocs-mermaid2-plugin mkdocs-git-revision-date-localized-plugin mkdocs-swagger-ui-tag
+
       - name: Audit review_date freshness
         run: |
           python - <<'EOF'
