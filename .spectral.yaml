@@ -1,0 +1,21 @@
+extends: ["spectral:oas"]
+
+rules:
+  operation-description:
+    description: Кожна операція повинна мати непорожній description.
+    given: $.paths.*.*.description
+    severity: error
+    then:
+      function: truthy
+
+  schema-example:
+    description: Кожна схема в components.schemas повинна містити хоча б один example.
+    given: $.components.schemas.*
+    severity: error
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          type: object
+          required:
+            - example

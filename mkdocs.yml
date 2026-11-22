@@ -20,6 +20,7 @@ theme:
 plugins:
   - search
   - mermaid2
+  - swagger-ui-tag
   - git-revision-date-localized:
       enable_creation_date: false
       type: date
