@@ -31,18 +31,8 @@ jobs:
           pip install mkdocs-material mkdocs-mermaid2-plugin mkdocs-git-revision-date-localized-plugin
 
       - name: Lint Markdown files
-        uses: DavidAnson/markdownlint-cli2-action@v17
-        with:
-          globs:
-            - "README.md"
-            - "docs/**/*.md"
-          config: |
-            {
-              "MD013": false,
-              "MD033": false,
-              "MD041": false
-            }
-
+        run: |
+          npx -y markdownlint-cli2 "README.md" "docs/**/*.md" "#docs/api/swagger.html"
 
       - name: Audit review_date freshness
         run: |
@@ -63,9 +53,9 @@ jobs:
                   expired.append((str(md_file), d_match.group(1)))
 
           if expired:
-              print("Прострочені документи (review_date < поточної дати):")
-              for p, d in expired:
-                  print(f"  - {p}: {d}")
+              print("Прострочені документи (review_date < сьогодні):")
+              for path, dt in expired:
+                  print(f"  - {path}: {dt}")
           else:
               print("Усі документи з review_date актуальні.")
           EOF
