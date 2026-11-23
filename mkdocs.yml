@@ -45,6 +45,8 @@ nav:
       - Як долучитися: developer/CONTRIBUTING.md
   - API Документація:
       - Огляд API: api/index.md
+  - Зміни та релізи:
+      - Заявка RFC-001: changes/RFC-001.md
   - Архітектура (Architecture Docs):
       - System Design (SDD): architecture/sdd.md
       - Infrastructure Spec (ISD): architecture/isd.md
