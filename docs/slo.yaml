@@ -1,0 +1,29 @@
+service: CourseWORK API (Python + MongoDB)
+window: 30d
+calendar_days_per_month: 30
+
+slis:
+  - name: availability_2xx
+    description: "Частка успішних HTTP-відповідей (2xx) від усіх запитів до API за 30-денне вікно"
+    metric_formula: "(count_2xx / total_requests) * 100"
+    slo_target: 99.5
+    sla_commitment: 99.0
+
+  - name: latency_p95
+    description: "Частка запитів до API з часом відповіді p95 менше 300 мс за 30-денне вікно"
+    metric_formula: "(requests_under_300ms / total_requests) * 100"
+    slo_target: 99.0
+    sla_commitment: 98.0
+
+  - name: background_jobs_success
+    description: "Частка фонових задач/операцій обробки, завершених без помилок за 30-денне вікно"
+    metric_formula: "(successful_jobs / total_jobs) * 100"
+    slo_target: 99.5
+    sla_commitment: 99.0
+
+rationale:
+  error_buffer: >
+    Внутрішня ціль SLO жорсткіша за зовнішню обіцянку SLA (наприклад, 99.5% SLO проти 99.0% SLA
+    для доступності та фонових задач; 99.0% проти 98.0% для p95 латентності). Різниця між SLA
+    та SLO формує буфер надійності: команда виявляє деградацію та вживає заходів до того, як
+    порушиться зовнішній контракт перед користувачем/клієнтом.
