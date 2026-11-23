@@ -47,6 +47,7 @@ nav:
       - Огляд API: api/index.md
   - Зміни та релізи:
       - Заявка RFC-001: changes/RFC-001.md
+      - Фінальний план супроводу та експлуатації: developer/maintenance-plan.md
   - Архітектура (Architecture Docs):
       - System Design (SDD): architecture/sdd.md
       - Infrastructure Spec (ISD): architecture/isd.md
